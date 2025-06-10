@@ -1,13 +1,11 @@
+version: '3.8'
 services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3090:80"
+  
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
-    restart: unless-stopped
-  
-  frontend:
-    build: ./frontend  # ← Certifique-se que existe um Dockerfile aqui!
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
+      - "8082:8082"
