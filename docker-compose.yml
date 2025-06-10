@@ -1,11 +1,24 @@
 version: '3.8'
+
 services:
   frontend:
     build: ./frontend
     ports:
       - "3000:3000"
-  
+    container_name: meu-frontend
+    restart: unless-stopped
+    networks:
+      - app-network
+
   backend:
     build: ./backend
     ports:
       - "8000:8000"
+    container_name: meu-backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
