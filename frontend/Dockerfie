@@ -1,0 +1,28 @@
+# Dockerfile (na pasta frontend)
+FROM node:18-alpine as build
+
+WORKDIR /app
+
+# Copia os arquivos de dependências
+COPY package.json package-lock.json ./
+
+# Instala dependências
+RUN npm ci
+
+# Copia o resto dos arquivos
+COPY . .
+
+# Build da aplicação
+RUN npm run build
+
+# Estágio de produção
+FROM nginx:alpine
+
+# Copia os arquivos buildados
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Expõe a porta 80 (default do nginx)
+EXPOSE 80
+
+# Comando para rodar o nginx
+CMD ["nginx", "-g", "daemon off;"]
