@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expõe a porta
-EXPOSE 8000
+EXPOSE 8082
 
 # Comando para rodar (ajuste 'main:app' se seu arquivo/app tem outro nome)
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
