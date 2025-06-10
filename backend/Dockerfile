@@ -16,4 +16,4 @@ COPY . .
 EXPOSE 8082
 
 # Comando para rodar (ajuste 'main:app' se seu arquivo/app tem outro nome)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8082"]
