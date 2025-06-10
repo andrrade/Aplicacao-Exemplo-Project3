@@ -17,7 +17,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Bem-vinda à API do Projeto CompassUOL!"}
+    return {"message": "Bem-vindo(a) à API do Projeto 3 da CompassUOL!"}
 
 # 1️⃣ Endpoint que retorna uma cor aleatória para mudar a cor da página
 @app.get("/color")
@@ -61,6 +61,7 @@ async def joke():
             return {"joke": full_joke}
         return JSONResponse(content={"error": "Failed to fetch joke"}, status_code=500)
 
+#  6️⃣ Retorna uma imagem de susto (ex.: GIF)
 @app.get("/scare")
 async def scare():
     scare_images = [
@@ -70,6 +71,7 @@ async def scare():
     random_scare = random.choice(scare_images)
     return {"scare_image_url": random_scare}
 
+# 7️⃣ Retorna uma imagem aleatória de “sósia”
 @app.get("/lookalike")
 async def lookalike():
     lookalike_images = [
