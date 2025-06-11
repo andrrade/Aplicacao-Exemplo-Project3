@@ -18,28 +18,28 @@ spec:
     spec:
       containers:
         - name: frontend-app
-          image: meu-frontend:v1.0.0
+          image: andrrade/meu-frontend:v1.0.0
           imagePullPolicy: Always  # Mudado para Always para garantir que pegue a versão mais recente
           ports:
             - containerPort: 3000
               name: http
-          # Health checks
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 3000
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+          # Health checks - Temporariamente desabilitado para debug
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 3000
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 10
+          #   timeoutSeconds: 5
+          #   failureThreshold: 3
+          # readinessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: 3000
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 5
+          #   timeoutSeconds: 3
+          #   failureThreshold: 3
           # Recursos
           resources:
             requests:
@@ -94,28 +94,28 @@ spec:
     spec:
       containers:
         - name: backend-app
-          image: meu-backend:v1.0.0
+          image: andrrade/meu-backend:v1.0.0
           imagePullPolicy: Always  # Mudado para Always
           ports:
             - containerPort: 8000
               name: http
-          # Health checks
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8000
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8000
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 3
+          # Health checks - Temporariamente desabilitado para debug
+          # livenessProbe:
+          #   httpGet:
+          #     path: /
+          #     port: 8000
+          #   initialDelaySeconds: 30
+          #   periodSeconds: 10
+          #   timeoutSeconds: 5
+          #   failureThreshold: 3
+          # readinessProbe:
+          #   httpGet:
+          #     path: /
+          #     port: 8000
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 5
+          #   timeoutSeconds: 3
+          #   failureThreshold: 3
           # Recursos
           resources:
             requests:
