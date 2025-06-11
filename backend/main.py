@@ -17,7 +17,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Bem-vindo(a) à API do Projeto 3 da CompassUOL!"}
+    return {"message": "Bem-vindo(a) à API do Projeto 3 da CompassUOL! (teste webhook)"}
 
 # 1️⃣ Endpoint que retorna uma cor aleatória para mudar a cor da página
 @app.get("/color")
