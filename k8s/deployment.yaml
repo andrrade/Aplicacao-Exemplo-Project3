@@ -1,3 +1,4 @@
+# Projeto3 Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -14,10 +15,11 @@ spec:
     spec:
       containers:
       - name: projeto3
-        image: andrrade/projeto3:{{tag}}
+        image: andrrade/meu-backend:16  # Substituí pela imagem válida
         ports:
         - containerPort: 8080
 ---
+# Projeto3 Service
 apiVersion: v1
 kind: Service
 metadata:
@@ -48,7 +50,7 @@ spec:
     spec:
       containers:
       - name: frontend-app
-        image: andrrade/frontend:v1.0.0
+        image: andrrade/meu-frontend:13  # Corrigido com a tag correta
         ports:
         - containerPort: 3000
 ---
@@ -83,7 +85,7 @@ spec:
     spec:
       containers:
       - name: backend-app
-        image: andrrade/backend:v1.0.0
+        image: andrrade/meu-backend:16  # Corrigido com a tag correta
         ports:
         - containerPort: 8000
 ---
@@ -100,4 +102,3 @@ spec:
     targetPort: 8000
     nodePort: 30001
   type: NodePort
-  
