@@ -1,10 +1,9 @@
 version: '3.8'
-
 services:
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
+      - "3001:3000"  # Mudou para 3001 local
     container_name: docker-frontend
     restart: unless-stopped
     networks:
@@ -13,7 +12,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "8001:8000"  # Mudou para 8001 local
     container_name: docker-backend
     restart: unless-stopped
     networks:
