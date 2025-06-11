@@ -1,38 +1,5 @@
-# Projeto3 Deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: projeto3
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: projeto3
-  template:
-    metadata:
-      labels:
-        app: projeto3
-    spec:
-      containers:
-      - name: projeto3
-        image: andrrade/meu-backend:16  # Substituí pela imagem válida
-        ports:
-        - containerPort: 8080
----
-# Projeto3 Service
-apiVersion: v1
-kind: Service
-metadata:
-  name: projeto3
-spec:
-  selector:
-    app: projeto3
-  ports:
-  - port: 80
-    targetPort: 8080
-    nodePort: 30080
-  type: NodePort
----
+# k8s/deployment.yaml
+
 # Frontend Deployment
 apiVersion: apps/v1
 kind: Deployment
@@ -50,7 +17,7 @@ spec:
     spec:
       containers:
       - name: frontend-app
-        image: andrrade/meu-frontend:13  # Corrigido com a tag correta
+        image: andrrade/meu-frontend:{{FRONTEND_TAG}}
         ports:
         - containerPort: 3000
 ---
@@ -85,7 +52,7 @@ spec:
     spec:
       containers:
       - name: backend-app
-        image: andrrade/meu-backend:16  # Corrigido com a tag correta
+        image: andrrade/meu-backend:{{BACKEND_TAG}}
         ports:
         - containerPort: 8000
 ---

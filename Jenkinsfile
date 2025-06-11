@@ -1,9 +1,6 @@
 pipeline {
     agent any
 
-    // ✅ Use webhook do GitHub/GitLab ao invés de polling
-    // Configure na aba Webhooks do seu repositório
-
     environment {
         DOCKERHUB_REPO = "andrrade"
         BUILD_TAG = "${env.BUILD_ID}"
@@ -49,22 +46,18 @@ pipeline {
             }
         }
         stage('Deploy no Kubernetes') {
-            environment {
-                tag_version = "${BUILD_TAG}"
-            }
             steps {
                 withKubeConfig([credentialsId: 'kubeconfig', serverUrl: 'https://192.168.1.81:6443']) {
                     script {
-                        // Atualiza as imagens no deployment.yaml
+                        // Copia e substitui os placeholders pelas tags do build atual
                         sh """
-                            sed -i 's|andrrade/meu-frontend:v1.0.0|${DOCKERHUB_REPO}/meu-frontend:${tag_version}|g' ./k8s/deployment.yaml
-                            sed -i 's|andrrade/meu-backend:v1.0.0|${DOCKERHUB_REPO}/meu-backend:${tag_version}|g' ./k8s/deployment.yaml
+                            cp ./k8s/deployment.yaml ./k8s/deployment.tmp.yaml
+                            sed -i 's|{{FRONTEND_TAG}}|${BUILD_TAG}|g' ./k8s/deployment.tmp.yaml
+                            sed -i 's|{{BACKEND_TAG}}|${BUILD_TAG}|g' ./k8s/deployment.tmp.yaml
                         """
 
-                        // Aplica o deployment
-                        sh 'kubectl apply -f k8s/deployment.yaml'
+                        sh 'kubectl apply -f ./k8s/deployment.tmp.yaml'
 
-                        // Aguarda o rollout
                         sh 'kubectl rollout status deployment/frontend-app'
                         sh 'kubectl rollout status deployment/backend-app'
                     }
