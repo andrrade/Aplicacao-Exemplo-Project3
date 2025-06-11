@@ -4,8 +4,6 @@ kind: Deployment
 metadata:
   name: frontend-app
   namespace: default
-  labels:
-    app: frontend-app
 spec:
   replicas: 2
   selector:
@@ -17,62 +15,26 @@ spec:
         app: frontend-app
     spec:
       containers:
-        - name: frontend-app
-          image: andrrade/meu-frontend:v1.0.0
-          imagePullPolicy: Always  # Mudado para Always para garantir que pegue a versão mais recente
-          ports:
-            - containerPort: 3000
-              name: http
-          # Health checks - Temporariamente desabilitado para debug
-          # livenessProbe:
-          #   httpGet:
-          #     path: /health
-          #     port: 3000
-          #   initialDelaySeconds: 30
-          #   periodSeconds: 10
-          #   timeoutSeconds: 5
-          #   failureThreshold: 3
-          # readinessProbe:
-          #   httpGet:
-          #     path: /health
-          #     port: 3000
-          #   initialDelaySeconds: 5
-          #   periodSeconds: 5
-          #   timeoutSeconds: 3
-          #   failureThreshold: 3
-          # Recursos
-          resources:
-            requests:
-              memory: "64Mi"
-              cpu: "50m"
-            limits:
-              memory: "256Mi"
-              cpu: "200m"
-          # Variáveis de ambiente
-          env:
-            - name: NODE_ENV
-              value: "production"
-
+      - name: frontend-app
+        image: meu-frontend:v1.0.0
+        ports:
+        - containerPort: 3000
+        imagePullPolicy: IfNotPresent
 ---
-# Frontend Service
+# Frontend Service (exposto em localhost:30000)
 apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
   namespace: default
-  labels:
-    app: frontend-app
 spec:
   selector:
     app: frontend-app
   ports:
-    - name: http
-      port: 80
-      targetPort: 3000
-      nodePort: 30000
-      protocol: TCP
+  - port: 80
+    targetPort: 3000
+    nodePort: 30000  
   type: NodePort
-
 ---
 # Backend Deployment
 apiVersion: apps/v1
@@ -80,8 +42,6 @@ kind: Deployment
 metadata:
   name: backend-app
   namespace: default
-  labels:
-    app: backend-app
 spec:
   replicas: 2
   selector:
@@ -93,59 +53,23 @@ spec:
         app: backend-app
     spec:
       containers:
-        - name: backend-app
-          image: andrrade/meu-backend:v1.0.0
-          imagePullPolicy: Always  # Mudado para Always
-          ports:
-            - containerPort: 8000
-              name: http
-          # Health checks - Temporariamente desabilitado para debug
-          # livenessProbe:
-          #   httpGet:
-          #     path: /
-          #     port: 8000
-          #   initialDelaySeconds: 30
-          #   periodSeconds: 10
-          #   timeoutSeconds: 5
-          #   failureThreshold: 3
-          # readinessProbe:
-          #   httpGet:
-          #     path: /
-          #     port: 8000
-          #   initialDelaySeconds: 5
-          #   periodSeconds: 5
-          #   timeoutSeconds: 3
-          #   failureThreshold: 3
-          # Recursos
-          resources:
-            requests:
-              memory: "128Mi"
-              cpu: "100m"
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-          # Variáveis de ambiente
-          env:
-            - name: PYTHONPATH
-              value: "/app"
-
+      - name: backend-app
+        image: meu-backend:v1.0.0
+        ports:
+        - containerPort: 8000
+        imagePullPolicy: IfNotPresent
 ---
-# Backend Service
+# Backend Service (exposto em localhost:30001)
 apiVersion: v1
 kind: Service
 metadata:
   name: backend-service
   namespace: default
-  labels:
-    app: backend-app
 spec:
   selector:
     app: backend-app
   ports:
-    - name: http
-      port: 80
-      targetPort: 8000
-      nodePort: 30001  # Corrigido para 30001 em vez de 30081
-      protocol: TCP
+  - port: 80
+    targetPort: 8000
+    nodePort: 30001
   type: NodePort
-  
