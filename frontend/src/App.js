@@ -54,7 +54,7 @@ export default function App() {
         fontFamily: "Arial, sans-serif",
       }}
     >
-      <h1>Projeto Frontend React (teste)</h1>
+      <h1>Projeto Frontend React (teste webhook)</h1>
 
       <section>
         <h2>Imagem Aleatória de Gato</h2>
