@@ -49,17 +49,21 @@ pipeline {
                 stage('Scan Frontend Image') {
                     steps {
                         script {
-                            // Instala Trivy se não estiver instalado
+                            // Instala Trivy se não estiver instalado (sem sudo)
                             sh '''
                                 if ! command -v trivy &> /dev/null; then
-                                    echo "Instalando Trivy..."
-                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+                                    echo "Instalando Trivy no diretório local..."
+                                    mkdir -p $HOME/bin
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/bin
+                                    export PATH="$HOME/bin:$PATH"
+                                    echo "Trivy instalado em $HOME/bin"
                                 fi
                             '''
                             
                             // Scanner da imagem frontend
                             sh """
                                 echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
+                                export PATH="\$HOME/bin:\$PATH"
                                 mkdir -p ${TRIVY_CACHE_DIR}
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
@@ -71,6 +75,7 @@ pipeline {
                             
                             // Gera relatório JSON para análise posterior
                             sh """
+                                export PATH="\$HOME/bin:\$PATH"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format json \
                                     --exit-code 0 \
@@ -87,17 +92,21 @@ pipeline {
                 stage('Scan Backend Image') {
                     steps {
                         script {
-                            // Instala Trivy se não estiver instalado
+                            // Instala Trivy se não estiver instalado (sem sudo)
                             sh '''
                                 if ! command -v trivy &> /dev/null; then
-                                    echo "Instalando Trivy..."
-                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+                                    echo "Instalando Trivy no diretório local..."
+                                    mkdir -p $HOME/bin
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/bin
+                                    export PATH="$HOME/bin:$PATH"
+                                    echo "Trivy instalado em $HOME/bin"
                                 fi
                             '''
                             
                             // Scanner da imagem backend
                             sh """
                                 echo "🔍 Executando scanner de vulnerabilidades no Backend..."
+                                export PATH="\$HOME/bin:\$PATH"
                                 mkdir -p ${TRIVY_CACHE_DIR}
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
@@ -109,6 +118,7 @@ pipeline {
                             
                             // Gera relatório JSON para análise posterior
                             sh """
+                                export PATH="\$HOME/bin:\$PATH"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format json \
                                     --exit-code 0 \
@@ -156,15 +166,6 @@ pipeline {
             chuckNorris()
             // Arquiva os relatórios de vulnerabilidades
             archiveArtifacts artifacts: '*-vulnerabilities.*', allowEmptyArchive: true
-            // Publica relatórios HTML se você tiver o plugin HTML Publisher
-            publishHTML([
-                allowMissing: false,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: '.',
-                reportFiles: '*-vulnerabilities.txt',
-                reportName: 'Trivy Security Report'
-            ])
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
