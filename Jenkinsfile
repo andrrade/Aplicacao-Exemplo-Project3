@@ -108,7 +108,7 @@ pipeline {
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
-                            // Verifica se existem vulnerabilidades críticas
+                            // Análise detalhada das vulnerabilidades
                             script {
                                 def criticalCount = sh(
                                     script: """
@@ -121,14 +121,74 @@ pipeline {
                                     returnStdout: true
                                 ).trim()
                                 
-                                echo "🔍 Vulnerabilidades críticas no Frontend: ${criticalCount}"
+                                def highCount = sh(
+                                    script: """
+                                        if [ -f frontend-vulnerability-report.json ]; then
+                                            grep -o '"Severity":"HIGH"' frontend-vulnerability-report.json | wc -l || echo "0"
+                                        else
+                                            echo "0"
+                                        fi
+                                    """,
+                                    returnStdout: true
+                                ).trim()
                                 
+                                def totalVulns = criticalCount.toInteger() + highCount.toInteger()
+                                
+                                echo "🔍 === RELATÓRIO DE SEGURANÇA - FRONTEND ==="
+                                echo "📊 Total de vulnerabilidades encontradas: ${totalVulns}"
+                                echo "🔴 Vulnerabilidades CRÍTICAS: ${criticalCount}"
+                                echo "🟡 Vulnerabilidades HIGH: ${highCount}"
+                                
+                                // Lista as vulnerabilidades encontradas
+                                if (totalVulns > 0) {
+                                    echo "📋 Detalhes das vulnerabilidades:"
+                                    def vulnDetails = sh(
+                                        script: """
+                                            if [ -f frontend-vulnerability-report.json ]; then
+                                                python3 -c "
+import json
+import sys
+try:
+    with open('frontend-vulnerability-report.json', 'r') as f:
+        data = json.load(f)
+    
+    if 'Results' in data and data['Results']:
+        for result in data['Results']:
+            if 'Vulnerabilities' in result and result['Vulnerabilities']:
+                for vuln in result['Vulnerabilities']:
+                    severity = vuln.get('Severity', 'N/A')
+                    vuln_id = vuln.get('VulnerabilityID', 'N/A')
+                    pkg_name = vuln.get('PkgName', 'N/A')
+                    title = vuln.get('Title', 'N/A')
+                    print(f'  • {severity}: {vuln_id} em {pkg_name} - {title}')
+    else:
+        print('  Nenhuma vulnerabilidade encontrada no arquivo JSON')
+except Exception as e:
+    print(f'  Erro ao analisar JSON: {e}')
+                                                " 2>/dev/null || echo "  Erro: Python não disponível para análise detalhada"
+                                            else
+                                                echo "  Arquivo de relatório não encontrado"
+                                            fi
+                                        """,
+                                        returnStdout: true
+                                    ).trim()
+                                    echo vulnDetails
+                                }
+                                
+                                // Define o status do build baseado nas vulnerabilidades
                                 if (criticalCount.toInteger() > 0) {
-                                    echo "⚠️ ATENÇÃO: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Frontend!"
+                                    echo "🚨 FALHA: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Frontend!"
+                                    echo "❌ Build será marcado como FALHADO devido a vulnerabilidades críticas"
+                                    currentBuild.result = 'FAILURE'
+                                    error("Vulnerabilidades críticas encontradas - build interrompido")
+                                } else if (highCount.toInteger() > 0) {
+                                    echo "⚠️ ATENÇÃO: ${highCount} vulnerabilidades HIGH encontradas no Frontend!"
+                                    echo "🟡 Build será marcado como INSTÁVEL"
                                     currentBuild.result = 'UNSTABLE'
                                 } else {
-                                    echo "✅ Nenhuma vulnerabilidade crítica encontrada no Frontend"
+                                    echo "✅ Nenhuma vulnerabilidade crítica ou alta encontrada no Frontend"
                                 }
+                                echo "============================================="
                             }
                         }
                     }
@@ -192,7 +252,7 @@ pipeline {
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
-                            // Verifica se existem vulnerabilidades críticas
+                            // Análise detalhada das vulnerabilidades
                             script {
                                 def criticalCount = sh(
                                     script: """
@@ -205,14 +265,74 @@ pipeline {
                                     returnStdout: true
                                 ).trim()
                                 
-                                echo "🔍 Vulnerabilidades críticas no Backend: ${criticalCount}"
+                                def highCount = sh(
+                                    script: """
+                                        if [ -f backend-vulnerability-report.json ]; then
+                                            grep -o '"Severity":"HIGH"' backend-vulnerability-report.json | wc -l || echo "0"
+                                        else
+                                            echo "0"
+                                        fi
+                                    """,
+                                    returnStdout: true
+                                ).trim()
                                 
+                                def totalVulns = criticalCount.toInteger() + highCount.toInteger()
+                                
+                                echo "🔍 === RELATÓRIO DE SEGURANÇA - BACKEND ==="
+                                echo "📊 Total de vulnerabilidades encontradas: ${totalVulns}"
+                                echo "🔴 Vulnerabilidades CRÍTICAS: ${criticalCount}"
+                                echo "🟡 Vulnerabilidades HIGH: ${highCount}"
+                                
+                                // Lista as vulnerabilidades encontradas
+                                if (totalVulns > 0) {
+                                    echo "📋 Detalhes das vulnerabilidades:"
+                                    def vulnDetails = sh(
+                                        script: """
+                                            if [ -f backend-vulnerability-report.json ]; then
+                                                python3 -c "
+import json
+import sys
+try:
+    with open('backend-vulnerability-report.json', 'r') as f:
+        data = json.load(f)
+    
+    if 'Results' in data and data['Results']:
+        for result in data['Results']:
+            if 'Vulnerabilities' in result and result['Vulnerabilities']:
+                for vuln in result['Vulnerabilities']:
+                    severity = vuln.get('Severity', 'N/A')
+                    vuln_id = vuln.get('VulnerabilityID', 'N/A')
+                    pkg_name = vuln.get('PkgName', 'N/A')
+                    title = vuln.get('Title', 'N/A')
+                    print(f'  • {severity}: {vuln_id} em {pkg_name} - {title}')
+    else:
+        print('  Nenhuma vulnerabilidade encontrada no arquivo JSON')
+except Exception as e:
+    print(f'  Erro ao analisar JSON: {e}')
+                                                " 2>/dev/null || echo "  Erro: Python não disponível para análise detalhada"
+                                            else
+                                                echo "  Arquivo de relatório não encontrado"
+                                            fi
+                                        """,
+                                        returnStdout: true
+                                    ).trim()
+                                    echo vulnDetails
+                                }
+                                
+                                // Define o status do build baseado nas vulnerabilidades
                                 if (criticalCount.toInteger() > 0) {
-                                    echo "⚠️ ATENÇÃO: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Backend!"
+                                    echo "🚨 FALHA: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Backend!"
+                                    echo "❌ Build será marcado como FALHADO devido a vulnerabilidades críticas"
+                                    currentBuild.result = 'FAILURE'
+                                    error("Vulnerabilidades críticas encontradas - build interrompido")
+                                } else if (highCount.toInteger() > 0) {
+                                    echo "⚠️ ATENÇÃO: ${highCount} vulnerabilidades HIGH encontradas no Backend!"
+                                    echo "🟡 Build será marcado como INSTÁVEL"
                                     currentBuild.result = 'UNSTABLE'
                                 } else {
-                                    echo "✅ Nenhuma vulnerabilidade crítica encontrada no Backend"
+                                    echo "✅ Nenhuma vulnerabilidade crítica ou alta encontrada no Backend"
                                 }
+                                echo "============================================="
                             }
                         }
                     }
@@ -223,19 +343,54 @@ pipeline {
                     // Arquiva os relatórios de vulnerabilidades
                     archiveArtifacts artifacts: '*-vulnerability-report.json', allowEmptyArchive: true
                     
-                    // Publica relatórios (se você tiver plugins específicos instalados)
-                    // publishHTML([
-                    //     allowMissing: false,
-                    //     alwaysLinkToLastBuild: true,
-                    //     keepAll: true,
-                    //     reportDir: '.',
-                    //     reportFiles: '*-vulnerability-report.json',
-                    //     reportName: 'Trivy Vulnerability Report'
-                    // ])
+                    // Cria um resumo das vulnerabilidades
+                    script {
+                        sh """
+                            echo "=== RESUMO DE SEGURANÇA ===" > security-summary.txt
+                            echo "Data: \$(date)" >> security-summary.txt
+                            echo "Build: ${BUILD_TAG}" >> security-summary.txt
+                            echo "" >> security-summary.txt
+                            
+                            # Frontend
+                            echo "FRONTEND:" >> security-summary.txt
+                            if [ -f frontend-vulnerability-report.json ]; then
+                                CRITICAL=\$(grep -o '"Severity":"CRITICAL"' frontend-vulnerability-report.json | wc -l || echo "0")
+                                HIGH=\$(grep -o '"Severity":"HIGH"' frontend-vulnerability-report.json | wc -l || echo "0")
+                                echo "  - Críticas: \$CRITICAL" >> security-summary.txt
+                                echo "  - High: \$HIGH" >> security-summary.txt
+                            else
+                                echo "  - Não escaneado" >> security-summary.txt
+                            fi
+                            
+                            # Backend
+                            echo "BACKEND:" >> security-summary.txt
+                            if [ -f backend-vulnerability-report.json ]; then
+                                CRITICAL=\$(grep -o '"Severity":"CRITICAL"' backend-vulnerability-report.json | wc -l || echo "0")
+                                HIGH=\$(grep -o '"Severity":"HIGH"' backend-vulnerability-report.json | wc -l || echo "0")
+                                echo "  - Críticas: \$CRITICAL" >> security-summary.txt
+                                echo "  - High: \$HIGH" >> security-summary.txt
+                            else
+                                echo "  - Não escaneado" >> security-summary.txt
+                            fi
+                            
+                            echo "=========================" >> security-summary.txt
+                            cat security-summary.txt
+                        """
+                    }
+                    
+                    archiveArtifacts artifacts: 'security-summary.txt', allowEmptyArchive: true
                 }
             }
         }
         stage('Deploy no Kubernetes') {
+            when {
+                not { 
+                    anyOf {
+                        equals expected: 'FAILURE', actual: currentBuild.result
+                        equals expected: 'ABORTED', actual: currentBuild.result
+                    }
+                }
+            }
             steps {
                 withKubeConfig([credentialsId: 'kubeconfig', serverUrl: 'https://192.168.1.81:6443']) {
                     script {
@@ -255,6 +410,14 @@ pipeline {
             }
         }
         stage('Verificar Deploy') {
+            when {
+                not { 
+                    anyOf {
+                        equals expected: 'FAILURE', actual: currentBuild.result
+                        equals expected: 'ABORTED', actual: currentBuild.result
+                    }
+                }
+            }
             steps {
                 withKubeConfig([credentialsId: 'kubeconfig', serverUrl: 'https://192.168.1.81:6443']) {
                     sh 'kubectl get pods -l app=frontend-app'
@@ -274,7 +437,7 @@ pipeline {
                 rm -rf ${TRIVY_TEMP_DIR}*
                 rm -f ./trivy
                 rm -f temp-*.json
-                rm -f *-vulnerability-report.json
+                rm -f ./k8s/deployment.tmp.yaml
             """
         }
         success {
@@ -287,13 +450,21 @@ pipeline {
             echo '🔧 Backend disponível em: http://localhost:30001'
         }
         failure {
-            echo '❌ Build falhou, mas Chuck Norris nunca desiste!'
-            echo '🔍 Chuck Norris está investigando o problema...'
-            echo '💡 Verifique: Docker build, DockerHub push, Scanner de segurança ou Kubernetes deploy'
+            echo '❌ Build falhou!'
+            echo '🔍 Possíveis causas:'
+            echo '  - Vulnerabilidades críticas encontradas'
+            echo '  - Falha no Docker build'
+            echo '  - Erro no push para DockerHub'
+            echo '  - Problemas no deploy do Kubernetes'
+            echo '💡 Verifique os logs e relatórios de segurança'
         }
         unstable {
-            echo '⚠️ Build instável - Chuck Norris está monitorando'
-            echo '🔒 Vulnerabilidades críticas encontradas - revisar relatórios de segurança'
+            echo '⚠️ Build instável - Vulnerabilidades HIGH encontradas'
+            echo '🔒 Revisar relatórios de segurança em:'
+            echo '  - frontend-vulnerability-report.json'  
+            echo '  - backend-vulnerability-report.json'
+            echo '  - security-summary.txt'
+            echo '💡 Deploy pode prosseguir, mas recomenda-se correção das vulnerabilidades'
         }
     }
 }
