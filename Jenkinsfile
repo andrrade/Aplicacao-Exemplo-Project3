@@ -217,9 +217,9 @@ EOF
 ⏱️ **Duração:** ${currentBuild.durationString}
 
 **🌐 Aplicação Disponível:**
-🎨 **Frontend:** http://192.168.1.81:30001
-🔧 **Backend:** http://192.168.1.81:30000
-📚 **Docs:** http://192.168.1.81:30000/docs
+🎨 **Frontend:** http://localhost:30000
+🔧 **Backend:** http://localhost:30001
+📚 **Docs:** http://localhost:30001/docs
 
 **🐳 Imagens Docker:**
 • Frontend: `${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}`
