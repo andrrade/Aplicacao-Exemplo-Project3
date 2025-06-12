@@ -4,6 +4,7 @@ pipeline {
     environment {
         DOCKERHUB_REPO = "andrrade"
         BUILD_TAG = "${env.BUILD_ID}"
+        DISCORD_WEBHOOK = "https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX"
     }
 
     stages {
@@ -206,9 +207,88 @@ EOF
             echo '🚀 Deploy realizado com sucesso!'
             echo "✅ Frontend: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
             echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
+            
+            // Notificação Discord para sucesso
+            discordSend(
+                description: """
+**✅ Deploy Realizado com Sucesso!**
+🚀 **Job:** ${JOB_NAME}
+🔢 **Build:** #${BUILD_NUMBER}
+⏱️ **Duração:** ${currentBuild.durationString}
+
+**🌐 Aplicação Disponível:**
+🎨 **Frontend:** http://192.168.1.81:30001
+🔧 **Backend:** http://192.168.1.81:30000
+📚 **Docs:** http://192.168.1.81:30000/docs
+
+**🐳 Imagens Docker:**
+• Frontend: `${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}`
+• Backend: `${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}`
+
+🔗 **Logs:** ${BUILD_URL}
+""",
+                footer: "Jenkins CI/CD Pipeline",
+                link: env.BUILD_URL,
+                result: "SUCCESS",
+                title: "✅ Pipeline Executada com Sucesso",
+                webhookURL: env.DISCORD_WEBHOOK
+            )
         }
         failure {
             echo '❌ Build falhou!'
+            
+            // Notificação Discord para falha
+            discordSend(
+                description: """
+**❌ Build Falhou!**
+🚀 **Job:** ${JOB_NAME}
+🔢 **Build:** #${BUILD_NUMBER}
+⏱️ **Duração:** ${currentBuild.durationString}
+🔍 **Verificar logs:** ${BUILD_URL}console
+""",
+                footer: "Jenkins CI/CD Pipeline",
+                link: env.BUILD_URL,
+                result: "FAILURE",
+                title: "❌ Pipeline Falhou",
+                webhookURL: env.DISCORD_WEBHOOK
+            )
+        }
+        unstable {
+            echo '⚠️ Build instável!'
+            
+            // Notificação Discord para build instável
+            discordSend(
+                description: """
+**⚠️ Build Instável!**
+🚀 **Job:** ${JOB_NAME}
+🔢 **Build:** #${BUILD_NUMBER}
+⏱️ **Duração:** ${currentBuild.durationString}
+🔍 **Verificar logs:** ${BUILD_URL}console
+""",
+                footer: "Jenkins CI/CD Pipeline",
+                link: env.BUILD_URL,
+                result: "UNSTABLE",
+                title: "⚠️ Pipeline Instável",
+                webhookURL: env.DISCORD_WEBHOOK
+            )
+        }
+        aborted {
+            echo '🛑 Build cancelado!'
+            
+            // Notificação Discord para build cancelado
+            discordSend(
+                description: """
+**🛑 Build Cancelado!**
+🚀 **Job:** ${JOB_NAME}
+🔢 **Build:** #${BUILD_NUMBER}
+⏱️ **Duração:** ${currentBuild.durationString}
+""",
+                footer: "Jenkins CI/CD Pipeline",
+                link: env.BUILD_URL,
+                result: "ABORTED",
+                title: "🛑 Pipeline Cancelada",
+                webhookURL: env.DISCORD_WEBHOOK
+            )
         }
     }
 }

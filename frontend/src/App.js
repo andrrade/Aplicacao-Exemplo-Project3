@@ -11,7 +11,7 @@ export default function App() {
   const [lookalikeImage, setLookalikeImage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const backendUrl = "http://127.0.0.1:8000";
+  const backendUrl = "http://localhost:30000";
 
   useEffect(() => {
     const fetchData = async () => {
