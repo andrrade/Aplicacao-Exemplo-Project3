@@ -198,26 +198,27 @@ EOF
     }
 
     post {
-    always {
-        chuckNorris()
-        sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml frontend-scan.json backend-scan.json'
-    }
-    success {
-        echo '🚀 Deploy realizado com sucesso!'
-        echo "✅ Frontend: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
-        echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
+        always {
+            chuckNorris()
+            sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml frontend-scan.json backend-scan.json'
+        }
+        success {
+            echo '🚀 Deploy realizado com sucesso!'
+            echo "✅ Frontend: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
+            echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
 
-        discordSend (
-            webhookURL: 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX',
-            message: "✅ Build *SUCESSO*!\nFrontend: `${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}`\nBackend: `${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}`"
-        )
-    }
-    failure {
-        echo '❌ Build falhou!'
+            discordSend (
+                webhookURL: 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX',
+                message: "✅ Build *SUCESSO*!\nFrontend: `${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}`\nBackend: `${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}`"
+            )
+        }
+        failure {
+            echo '❌ Build falhou!'
 
-        discordSend (
-            webhookURL: 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX',
-            message: "❌ Build *FALHOU!* Verifique o Jenkins para mais detalhes!"
-        )
+            discordSend (
+                webhookURL: 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX',
+                message: "❌ Build *FALHOU!* Verifique o Jenkins para mais detalhes!"
+            )
+        }
     }
 }
