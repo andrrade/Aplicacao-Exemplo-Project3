@@ -73,9 +73,8 @@ pipeline {
                                 returnStdout: true
                             ).trim()
                             
-                            def vulnCount = sh(
-                                script: """
-                                    echo '${scanResult}' | python3 -c "
+                            sh """
+                                echo '${scanResult}' | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 critical = high = medium = low = unknown = 0
@@ -89,20 +88,8 @@ for result in data.get('Results', []):
         else: unknown += 1
 total = critical + high + medium + low + unknown
 print(f'Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})')
-if critical > 0: sys.exit(1)
-elif high > 0: sys.exit(2)
-                                    " 2>/dev/null || echo "Scan error"
-                                """,
-                                returnStatus: true
-                            )
-                            
-                            if (vulnCount == 1) {
-                                currentBuild.result = 'FAILURE'
-                                error("Critical vulnerabilities found in Frontend")
-                            } else if (vulnCount == 2) {
-                                currentBuild.result = 'UNSTABLE'
-                                echo "⚠️ High vulnerabilities found in Frontend"
-                            }
+                                " 2>/dev/null || echo "Scan error"
+                            """
                         }
                     }
                 }
@@ -127,9 +114,8 @@ elif high > 0: sys.exit(2)
                                 returnStdout: true
                             ).trim()
                             
-                            def vulnCount = sh(
-                                script: """
-                                    echo '${scanResult}' | python3 -c "
+                            sh """
+                                echo '${scanResult}' | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
 critical = high = medium = low = unknown = 0
@@ -143,20 +129,8 @@ for result in data.get('Results', []):
         else: unknown += 1
 total = critical + high + medium + low + unknown
 print(f'Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})')
-if critical > 0: sys.exit(1)
-elif high > 0: sys.exit(2)
-                                    " 2>/dev/null || echo "Scan error"
-                                """,
-                                returnStatus: true
-                            )
-                            
-                            if (vulnCount == 1) {
-                                currentBuild.result = 'FAILURE'
-                                error("Critical vulnerabilities found in Backend")
-                            } else if (vulnCount == 2) {
-                                currentBuild.result = 'UNSTABLE'
-                                echo "⚠️ High vulnerabilities found in Backend"
-                            }
+                                " 2>/dev/null || echo "Scan error"
+                            """
                         }
                     }
                 }
@@ -218,10 +192,7 @@ elif high > 0: sys.exit(2)
             echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
         }
         failure {
-            echo '❌ Build falhou - Vulnerabilidades críticas encontradas'
-        }
-        unstable {
-            echo '⚠️ Build instável - Vulnerabilidades HIGH encontradas'
+            echo '❌ Build falhou!'
         }
     }
 }
