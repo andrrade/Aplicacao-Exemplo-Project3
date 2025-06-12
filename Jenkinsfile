@@ -60,20 +60,23 @@ pipeline {
                                 fi
                             '''
                             
-                            // Scanner da imagem frontend
+                            echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
+                            
+                            // Scanner da imagem frontend com saída direta no console
                             sh """
-                                echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
                                 export PATH="\$HOME/bin:\$PATH"
                                 mkdir -p ${TRIVY_CACHE_DIR}
+                                echo "========================================"
+                                echo "RELATÓRIO DE VULNERABILIDADES - FRONTEND"
+                                echo "========================================"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
                                     --exit-code 0 \
                                     --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                    --output frontend-vulnerabilities.txt \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
-                            // Gera relatório JSON para análise posterior
+                            // Gera relatório JSON para análise posterior (opcional)
                             sh """
                                 export PATH="\$HOME/bin:\$PATH"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
@@ -83,9 +86,6 @@ pipeline {
                                     --output frontend-vulnerabilities.json \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
-                            
-                            // Exibe resultado no console
-                            sh 'cat frontend-vulnerabilities.txt'
                         }
                     }
                 }
@@ -103,20 +103,23 @@ pipeline {
                                 fi
                             '''
                             
-                            // Scanner da imagem backend
+                            echo "🔍 Executando scanner de vulnerabilidades no Backend..."
+                            
+                            // Scanner da imagem backend com saída direta no console
                             sh """
-                                echo "🔍 Executando scanner de vulnerabilidades no Backend..."
                                 export PATH="\$HOME/bin:\$PATH"
                                 mkdir -p ${TRIVY_CACHE_DIR}
+                                echo "======================================="
+                                echo "RELATÓRIO DE VULNERABILIDADES - BACKEND"
+                                echo "======================================="
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
                                     --exit-code 0 \
                                     --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                    --output backend-vulnerabilities.txt \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
-                            // Gera relatório JSON para análise posterior
+                            // Gera relatório JSON para análise posterior (opcional)
                             sh """
                                 export PATH="\$HOME/bin:\$PATH"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
@@ -126,9 +129,6 @@ pipeline {
                                     --output backend-vulnerabilities.json \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
-                            
-                            // Exibe resultado no console
-                            sh 'cat backend-vulnerabilities.txt'
                         }
                     }
                 }
@@ -164,8 +164,8 @@ pipeline {
     post {
         always {
             chuckNorris()
-            // Arquiva os relatórios de vulnerabilidades
-            archiveArtifacts artifacts: '*-vulnerabilities.*', allowEmptyArchive: true
+            // Arquiva os relatórios de vulnerabilidades JSON (opcional)
+            archiveArtifacts artifacts: '*-vulnerabilities.json', allowEmptyArchive: true
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
