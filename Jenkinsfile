@@ -1,11 +1,10 @@
 pipeline {
     agent any
-
     environment {
         DOCKERHUB_REPO = "andrrade"
         BUILD_TAG = "${env.BUILD_ID}"
+        TRIVY_CACHE_DIR = "/tmp/trivy-cache"
     }
-
     stages {
         stage('Build Frontend Docker Image') {
             steps {
@@ -45,6 +44,86 @@ pipeline {
                 }
             }
         }
+        stage('Security Scan with Trivy') {
+            parallel {
+                stage('Scan Frontend Image') {
+                    steps {
+                        script {
+                            // Instala Trivy se não estiver instalado
+                            sh '''
+                                if ! command -v trivy &> /dev/null; then
+                                    echo "Instalando Trivy..."
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+                                fi
+                            '''
+                            
+                            // Scanner da imagem frontend
+                            sh """
+                                echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
+                                mkdir -p ${TRIVY_CACHE_DIR}
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format table \
+                                    --exit-code 0 \
+                                    --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output frontend-vulnerabilities.txt \
+                                    ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                            """
+                            
+                            // Gera relatório JSON para análise posterior
+                            sh """
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format json \
+                                    --exit-code 0 \
+                                    --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output frontend-vulnerabilities.json \
+                                    ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                            """
+                            
+                            // Exibe resultado no console
+                            sh 'cat frontend-vulnerabilities.txt'
+                        }
+                    }
+                }
+                stage('Scan Backend Image') {
+                    steps {
+                        script {
+                            // Instala Trivy se não estiver instalado
+                            sh '''
+                                if ! command -v trivy &> /dev/null; then
+                                    echo "Instalando Trivy..."
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+                                fi
+                            '''
+                            
+                            // Scanner da imagem backend
+                            sh """
+                                echo "🔍 Executando scanner de vulnerabilidades no Backend..."
+                                mkdir -p ${TRIVY_CACHE_DIR}
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format table \
+                                    --exit-code 0 \
+                                    --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output backend-vulnerabilities.txt \
+                                    ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                            """
+                            
+                            // Gera relatório JSON para análise posterior
+                            sh """
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format json \
+                                    --exit-code 0 \
+                                    --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output backend-vulnerabilities.json \
+                                    ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                            """
+                            
+                            // Exibe resultado no console
+                            sh 'cat backend-vulnerabilities.txt'
+                        }
+                    }
+                }
+            }
+        }
         stage('Deploy no Kubernetes') {
             steps {
                 withKubeConfig([credentialsId: 'kubeconfig', serverUrl: 'https://192.168.1.81:6443']) {
@@ -55,9 +134,7 @@ pipeline {
                             sed -i 's|{{FRONTEND_TAG}}|${BUILD_TAG}|g' ./k8s/deployment.tmp.yaml
                             sed -i 's|{{BACKEND_TAG}}|${BUILD_TAG}|g' ./k8s/deployment.tmp.yaml
                         """
-
                         sh 'kubectl apply -f ./k8s/deployment.tmp.yaml'
-
                         sh 'kubectl rollout status deployment/frontend-app'
                         sh 'kubectl rollout status deployment/backend-app'
                     }
@@ -74,13 +151,24 @@ pipeline {
             }
         }
     }
-
     post {
         always {
             chuckNorris()
+            // Arquiva os relatórios de vulnerabilidades
+            archiveArtifacts artifacts: '*-vulnerabilities.*', allowEmptyArchive: true
+            // Publica relatórios HTML se você tiver o plugin HTML Publisher
+            publishHTML([
+                allowMissing: false,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: '.',
+                reportFiles: '*-vulnerabilities.txt',
+                reportName: 'Trivy Security Report'
+            ])
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
+            echo '🔒 Scanner de segurança executado com sucesso!'
             echo '💪 Chuck Norris aprova seu pipeline DevSecOps!'
             echo "✅ Frontend: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} deployado"
             echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} deployado"
@@ -90,7 +178,7 @@ pipeline {
         failure {
             echo '❌ Build falhou, mas Chuck Norris nunca desiste!'
             echo '🔍 Chuck Norris está investigando o problema...'
-            echo '💡 Verifique: Docker build, DockerHub push ou Kubernetes deploy'
+            echo '💡 Verifique: Docker build, DockerHub push, Scanner de segurança ou Kubernetes deploy'
         }
         unstable {
             echo '⚠️ Build instável - Chuck Norris está monitorando'
