@@ -68,11 +68,21 @@ pipeline {
                                     mkdir -p ${TRIVY_CACHE_DIR}
                                     
                                     echo "=== RELATÓRIO DE VULNERABILIDADES - FRONTEND ==="
+                                    echo "📊 Resumo:"
                                     trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                         --format table \
                                         --exit-code 0 \
                                         --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} || echo "⚠️ Trivy encontrou vulnerabilidades ou teve problemas"
+                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                    
+                                    echo ""
+                                    echo "🔍 Detalhes das vulnerabilidades (se houver):"
+                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --format table \
+                                        --exit-code 0 \
+                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --list-all-pkgs \
+                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} || echo "✅ Nenhuma vulnerabilidade encontrada ou erro no scanner"
                                     echo "=== FIM DO RELATÓRIO FRONTEND ==="
                                 """
                                 
@@ -105,11 +115,21 @@ pipeline {
                                     mkdir -p ${TRIVY_CACHE_DIR}
                                     
                                     echo "=== RELATÓRIO DE VULNERABILIDADES - BACKEND ==="
+                                    echo "📊 Resumo:"
                                     trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                         --format table \
                                         --exit-code 0 \
                                         --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} || echo "⚠️ Trivy encontrou vulnerabilidades ou teve problemas"
+                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                                    
+                                    echo ""
+                                    echo "🔍 Detalhes das vulnerabilidades (se houver):"
+                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --format table \
+                                        --exit-code 0 \
+                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --list-all-pkgs \
+                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} || echo "✅ Nenhuma vulnerabilidade encontrada ou erro no scanner"
                                     echo "=== FIM DO RELATÓRIO BACKEND ==="
                                 """
                                 
