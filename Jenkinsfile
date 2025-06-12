@@ -4,7 +4,8 @@ pipeline {
     environment {
         DOCKERHUB_REPO = "andrrade"  // Substitua pelo seu usuário DockerHub
         BUILD_TAG = "${env.BUILD_ID}"
-        TRIVY_CACHE_DIR = "/tmp/trivy-cache"
+        TRIVY_CACHE_DIR = "${env.WORKSPACE}/trivy-cache"
+        TRIVY_TEMP_DIR = "${env.WORKSPACE}/trivy-temp"
     }
 
     stages {
@@ -51,6 +52,14 @@ pipeline {
                 stage('Scan Frontend Image') {
                     steps {
                         script {
+                            // Limpa e prepara ambiente do Trivy
+                            sh """
+                                rm -rf ${TRIVY_CACHE_DIR}
+                                rm -rf ${TRIVY_TEMP_DIR}
+                                mkdir -p ${TRIVY_CACHE_DIR}
+                                mkdir -p ${TRIVY_TEMP_DIR}
+                            """
+                            
                             // Instala Trivy localmente se não estiver disponível
                             sh '''
                                 if ! command -v trivy &> /dev/null && [ ! -f ./trivy ]; then
@@ -63,45 +72,56 @@ pipeline {
                             // Define o comando trivy
                             def trivyCmd = sh(script: 'command -v trivy', returnStatus: true) == 0 ? 'trivy' : './trivy'
                             
-                            // Cria diretório de cache do Trivy
-                            sh "mkdir -p ${TRIVY_CACHE_DIR}"
+                            // Atualiza base de dados com retry
+                            retry(3) {
+                                sh """
+                                    echo "🔄 Atualizando base de dados do Trivy..."
+                                    TMPDIR=${TRIVY_TEMP_DIR} ${trivyCmd} image --download-db-only --cache-dir ${TRIVY_CACHE_DIR}
+                                """
+                            }
                             
                             // Scanner de vulnerabilidades para Frontend
                             sh """
                                 echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
-                                ${trivyCmd} image --cache-dir ${TRIVY_CACHE_DIR} \
+                                TMPDIR=${TRIVY_TEMP_DIR} ${trivyCmd} image \
+                                    --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --skip-db-update \
                                     --format table \
                                     --exit-code 0 \
                                     --severity HIGH,CRITICAL \
                                     --no-progress \
+                                    --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
                             // Gera relatório em formato JSON
                             sh """
-                                ${trivyCmd} image --cache-dir ${TRIVY_CACHE_DIR} \
+                                echo "📄 Gerando relatório JSON do Frontend..."
+                                TMPDIR=${TRIVY_TEMP_DIR} ${trivyCmd} image \
+                                    --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --skip-db-update \
                                     --format json \
                                     --output frontend-vulnerability-report.json \
                                     --severity HIGH,CRITICAL \
                                     --no-progress \
+                                    --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
-                            // Verifica se existem vulnerabilidades críticas (método simplificado)
+                            // Verifica se existem vulnerabilidades críticas
                             script {
                                 def criticalCount = sh(
                                     script: """
-                                        ${trivyCmd} image --cache-dir ${TRIVY_CACHE_DIR} \
-                                            --format json \
-                                            --severity CRITICAL \
-                                            --quiet \
-                                            ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} > temp-frontend.json 2>/dev/null || echo "[]" > temp-frontend.json
-                                        
-                                        # Conta vulnerabilidades usando grep simples
-                                        grep -o '"Severity":"CRITICAL"' temp-frontend.json | wc -l || echo "0"
+                                        if [ -f frontend-vulnerability-report.json ]; then
+                                            grep -o '"Severity":"CRITICAL"' frontend-vulnerability-report.json | wc -l || echo "0"
+                                        else
+                                            echo "0"
+                                        fi
                                     """,
                                     returnStdout: true
                                 ).trim()
+                                
+                                echo "🔍 Vulnerabilidades críticas no Frontend: ${criticalCount}"
                                 
                                 if (criticalCount.toInteger() > 0) {
                                     echo "⚠️ ATENÇÃO: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Frontend!"
@@ -109,9 +129,6 @@ pipeline {
                                 } else {
                                     echo "✅ Nenhuma vulnerabilidade crítica encontrada no Frontend"
                                 }
-                                
-                                // Limpa arquivo temporário
-                                sh "rm -f temp-frontend.json"
                             }
                         }
                     }
@@ -119,6 +136,14 @@ pipeline {
                 stage('Scan Backend Image') {
                     steps {
                         script {
+                            // Limpa e prepara ambiente do Trivy
+                            sh """
+                                rm -rf ${TRIVY_CACHE_DIR}-backend
+                                rm -rf ${TRIVY_TEMP_DIR}-backend
+                                mkdir -p ${TRIVY_CACHE_DIR}-backend
+                                mkdir -p ${TRIVY_TEMP_DIR}-backend
+                            """
+                            
                             // Instala Trivy localmente se não estiver disponível
                             sh '''
                                 if ! command -v trivy &> /dev/null && [ ! -f ./trivy ]; then
@@ -131,45 +156,56 @@ pipeline {
                             // Define o comando trivy
                             def trivyCmd = sh(script: 'command -v trivy', returnStatus: true) == 0 ? 'trivy' : './trivy'
                             
-                            // Cria diretório de cache do Trivy
-                            sh "mkdir -p ${TRIVY_CACHE_DIR}"
+                            // Atualiza base de dados com retry
+                            retry(3) {
+                                sh """
+                                    echo "🔄 Atualizando base de dados do Trivy..."
+                                    TMPDIR=${TRIVY_TEMP_DIR}-backend ${trivyCmd} image --download-db-only --cache-dir ${TRIVY_CACHE_DIR}-backend
+                                """
+                            }
                             
                             // Scanner de vulnerabilidades para Backend
                             sh """
                                 echo "🔍 Executando scanner de vulnerabilidades no Backend..."
-                                ${trivyCmd} image --cache-dir ${TRIVY_CACHE_DIR} \
+                                TMPDIR=${TRIVY_TEMP_DIR}-backend ${trivyCmd} image \
+                                    --cache-dir ${TRIVY_CACHE_DIR}-backend \
+                                    --skip-db-update \
                                     --format table \
                                     --exit-code 0 \
                                     --severity HIGH,CRITICAL \
                                     --no-progress \
+                                    --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
                             // Gera relatório em formato JSON
                             sh """
-                                ${trivyCmd} image --cache-dir ${TRIVY_CACHE_DIR} \
+                                echo "📄 Gerando relatório JSON do Backend..."
+                                TMPDIR=${TRIVY_TEMP_DIR}-backend ${trivyCmd} image \
+                                    --cache-dir ${TRIVY_CACHE_DIR}-backend \
+                                    --skip-db-update \
                                     --format json \
                                     --output backend-vulnerability-report.json \
                                     --severity HIGH,CRITICAL \
                                     --no-progress \
+                                    --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
-                            // Verifica se existem vulnerabilidades críticas (método simplificado)
+                            // Verifica se existem vulnerabilidades críticas
                             script {
                                 def criticalCount = sh(
                                     script: """
-                                        ${trivyCmd} image --cache-dir ${TRIVY_CACHE_DIR} \
-                                            --format json \
-                                            --severity CRITICAL \
-                                            --quiet \
-                                            ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} > temp-backend.json 2>/dev/null || echo "[]" > temp-backend.json
-                                        
-                                        # Conta vulnerabilidades usando grep simples
-                                        grep -o '"Severity":"CRITICAL"' temp-backend.json | wc -l || echo "0"
+                                        if [ -f backend-vulnerability-report.json ]; then
+                                            grep -o '"Severity":"CRITICAL"' backend-vulnerability-report.json | wc -l || echo "0"
+                                        else
+                                            echo "0"
+                                        fi
                                     """,
                                     returnStdout: true
                                 ).trim()
+                                
+                                echo "🔍 Vulnerabilidades críticas no Backend: ${criticalCount}"
                                 
                                 if (criticalCount.toInteger() > 0) {
                                     echo "⚠️ ATENÇÃO: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Backend!"
@@ -177,9 +213,6 @@ pipeline {
                                 } else {
                                     echo "✅ Nenhuma vulnerabilidade crítica encontrada no Backend"
                                 }
-                                
-                                // Limpa arquivo temporário
-                                sh "rm -f temp-backend.json"
                             }
                         }
                     }
@@ -237,9 +270,11 @@ pipeline {
             chuckNorris()
             // Limpa cache do Trivy e arquivos temporários
             sh """
-                rm -rf ${TRIVY_CACHE_DIR}
+                rm -rf ${TRIVY_CACHE_DIR}*
+                rm -rf ${TRIVY_TEMP_DIR}*
                 rm -f ./trivy
                 rm -f temp-*.json
+                rm -f *-vulnerability-report.json
             """
         }
         success {
