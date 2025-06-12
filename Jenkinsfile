@@ -260,6 +260,11 @@ except Exception as e:
                             }
                         }
                     }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'frontend-vulnerability-report.json', allowEmptyArchive: true
+                        }
+                    }
                 }
                 stage('Scan Backend Image') {
                     steps {
@@ -472,28 +477,30 @@ except Exception as e:
                             }
                         }
                     }
+                    post {
+                        always {
+                            archiveArtifacts artifacts: 'backend-vulnerability-report.json', allowEmptyArchive: true
+                        }
+                    }
                 }
             }
-            post {
-                always {
-                    // Arquiva os relatórios de vulnerabilidades
-                    archiveArtifacts artifacts: '*-vulnerability-report.json', allowEmptyArchive: true
-                    
-                    // Cria um resumo das vulnerabilidades - VERSÃO MELHORADA
-                    script {
-                        sh """
-                            echo "=== RESUMO DE SEGURANÇA ===" > security-summary.txt
-                            echo "Data: \$(date)" >> security-summary.txt
-                            echo "Build: ${BUILD_TAG}" >> security-summary.txt
-                            echo "" >> security-summary.txt
+        }
+        stage('Generate Security Summary') {
+            steps {
+                script {
+                    sh """
+                        echo "=== RESUMO DE SEGURANÇA ===" > security-summary.txt
+                        echo "Data: \$(date)" >> security-summary.txt
+                        echo "Build: ${BUILD_TAG}" >> security-summary.txt
+                        echo "" >> security-summary.txt
+                        
+                        # Função para analisar JSON
+                        analyze_json() {
+                            local json_file=\$1
+                            local component=\$2
                             
-                            # Função para analisar JSON
-                            analyze_json() {
-                                local json_file=\$1
-                                local component=\$2
-                                
-                                if [ -f "\$json_file" ]; then
-                                    python3 -c "
+                            if [ -f "\$json_file" ]; then
+                                python3 -c "
 import json
 import sys
 
@@ -532,22 +539,20 @@ try:
 except Exception as e:
     print(f'\$component:')
     print(f'  - Erro ao analisar: {str(e)}')
-                                    " 2>/dev/null || echo "\$component: Erro - Python não disponível"
-                                else
-                                    echo "\$component: Não escaneado"
-                                fi
-                            }
-                            
-                            # Análise Frontend e Backend
-                            analyze_json "frontend-vulnerability-report.json" "FRONTEND" >> security-summary.txt
-                            analyze_json "backend-vulnerability-report.json" "BACKEND" >> security-summary.txt
-                            
-                            echo "" >> security-summary.txt
-                            echo "=========================" >> security-summary.txt
-                            cat security-summary.txt
-                        """
-                    }
-                    
+                                " 2>/dev/null || echo "\$component: Erro - Python não disponível"
+                            else
+                                echo "\$component: Não escaneado"
+                            fi
+                        }
+                        
+                        # Análise Frontend e Backend
+                        analyze_json "frontend-vulnerability-report.json" "FRONTEND" >> security-summary.txt
+                        analyze_json "backend-vulnerability-report.json" "BACKEND" >> security-summary.txt
+                        
+                        echo "" >> security-summary.txt
+                        echo "=========================" >> security-summary.txt
+                        cat security-summary.txt
+                    """
                     archiveArtifacts artifacts: 'security-summary.txt', allowEmptyArchive: true
                 }
             }
@@ -637,4 +642,4 @@ except Exception as e:
             echo '💡 Deploy pode prosseguir, mas recomenda-se correção das vulnerabilidades'
         }
     }
-    
+}
