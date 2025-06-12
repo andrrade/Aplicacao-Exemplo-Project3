@@ -4,6 +4,7 @@ pipeline {
     environment {
         DOCKERHUB_REPO = "andrrade"
         BUILD_TAG = "${env.BUILD_ID}"
+        DISCORD_WEBHOOK = 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX'
     }
 
     stages {
@@ -61,22 +62,22 @@ pipeline {
                                     curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
                                 fi
                             '''
-                            
+
                             def trivyCmd = sh(script: 'command -v trivy', returnStatus: true) == 0 ? 'trivy' : './trivy'
-                            
+
                             sh """
                                 ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
-                            
+
                             sh """
                                 ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} > frontend-scan.json
-                                
+
                                 python3 << 'EOF'
 import json
 try:
     with open('frontend-scan.json', 'r') as f:
         data = json.load(f)
-    
+
     critical = high = medium = low = unknown = 0
     for result in data.get('Results', []):
         for vuln in result.get('Vulnerabilities', []):
@@ -91,7 +92,7 @@ try:
                 low += 1
             else: 
                 unknown += 1
-    
+
     total = critical + high + medium + low + unknown
     print(f"Frontend - Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})")
 except:
@@ -101,7 +102,7 @@ EOF
                         }
                     }
                 }
-                
+
                 stage('Scan Backend') {
                     steps {
                         script {
@@ -110,22 +111,22 @@ EOF
                                     curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
                                 fi
                             '''
-                            
+
                             def trivyCmd = sh(script: 'command -v trivy', returnStatus: true) == 0 ? 'trivy' : './trivy'
-                            
+
                             sh """
                                 ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
-                            
+
                             sh """
                                 ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} > backend-scan.json
-                                
+
                                 python3 << 'EOF'
 import json
 try:
     with open('backend-scan.json', 'r') as f:
         data = json.load(f)
-    
+
     critical = high = medium = low = unknown = 0
     for result in data.get('Results', []):
         for vuln in result.get('Vulnerabilities', []):
@@ -140,7 +141,7 @@ try:
                 low += 1
             else: 
                 unknown += 1
-    
+
     total = critical + high + medium + low + unknown
     print(f"Backend - Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})")
 except:
@@ -199,7 +200,8 @@ EOF
 
     post {
         always {
-            chuckNorris()
+            // Comando fictício para animação, pode remover ou substituir
+            echo 'Finalizando pipeline...'
             sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml frontend-scan.json backend-scan.json'
         }
         success {
@@ -208,16 +210,16 @@ EOF
             echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
 
             discordSend (
-                webhookURL: 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX',
-                message: "✅ Build *SUCESSO*!\nFrontend: `${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}`\nBackend: `${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}`"
+                webhookURL: "${DISCORD_WEBHOOK}",
+                content: "✅ Build *SUCESSO*!\nFrontend: `${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}`\nBackend: `${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}`"
             )
         }
         failure {
             echo '❌ Build falhou!'
 
             discordSend (
-                webhookURL: 'https://discordapp.com/api/webhooks/1382761573411721216/7M3tXv4XD7_H3xEjYUJndbOm9sGWkPABuLSvXssREJmWckZ6tYSqn9LYrUN0eFjKEgDX',
-                message: "❌ Build *FALHOU!* Verifique o Jenkins para mais detalhes!"
+                webhookURL: "${DISCORD_WEBHOOK}",
+                content: "❌ Build *FALHOU!* Verifique o Jenkins para mais detalhes!"
             )
         }
     }
