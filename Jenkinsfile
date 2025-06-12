@@ -68,27 +68,35 @@ pipeline {
                                 ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
-                            def scanResult = sh(
-                                script: "${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}",
-                                returnStdout: true
-                            ).trim()
-                            
                             sh """
-                                echo '${scanResult}' | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-critical = high = medium = low = unknown = 0
-for result in data.get('Results', []):
-    for vuln in result.get('Vulnerabilities', []):
-        severity = vuln.get('Severity', 'UNKNOWN').upper()
-        if severity == 'CRITICAL': critical += 1
-        elif severity == 'HIGH': high += 1
-        elif severity == 'MEDIUM': medium += 1
-        elif severity == 'LOW': low += 1
-        else: unknown += 1
-total = critical + high + medium + low + unknown
-print(f'Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})')
-                                " 2>/dev/null || echo "Scan error"
+                                ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} > frontend-scan.json
+                                
+                                python3 << 'EOF'
+import json
+try:
+    with open('frontend-scan.json', 'r') as f:
+        data = json.load(f)
+    
+    critical = high = medium = low = unknown = 0
+    for result in data.get('Results', []):
+        for vuln in result.get('Vulnerabilities', []):
+            severity = vuln.get('Severity', 'UNKNOWN').upper()
+            if severity == 'CRITICAL': 
+                critical += 1
+            elif severity == 'HIGH': 
+                high += 1
+            elif severity == 'MEDIUM': 
+                medium += 1
+            elif severity == 'LOW': 
+                low += 1
+            else: 
+                unknown += 1
+    
+    total = critical + high + medium + low + unknown
+    print(f"Frontend - Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})")
+except:
+    print("Frontend - Scan error")
+EOF
                             """
                         }
                     }
@@ -109,27 +117,35 @@ print(f'Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: 
                                 ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
-                            def scanResult = sh(
-                                script: "${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}",
-                                returnStdout: true
-                            ).trim()
-                            
                             sh """
-                                echo '${scanResult}' | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-critical = high = medium = low = unknown = 0
-for result in data.get('Results', []):
-    for vuln in result.get('Vulnerabilities', []):
-        severity = vuln.get('Severity', 'UNKNOWN').upper()
-        if severity == 'CRITICAL': critical += 1
-        elif severity == 'HIGH': high += 1
-        elif severity == 'MEDIUM': medium += 1
-        elif severity == 'LOW': low += 1
-        else: unknown += 1
-total = critical + high + medium + low + unknown
-print(f'Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})')
-                                " 2>/dev/null || echo "Scan error"
+                                ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} > backend-scan.json
+                                
+                                python3 << 'EOF'
+import json
+try:
+    with open('backend-scan.json', 'r') as f:
+        data = json.load(f)
+    
+    critical = high = medium = low = unknown = 0
+    for result in data.get('Results', []):
+        for vuln in result.get('Vulnerabilities', []):
+            severity = vuln.get('Severity', 'UNKNOWN').upper()
+            if severity == 'CRITICAL': 
+                critical += 1
+            elif severity == 'HIGH': 
+                high += 1
+            elif severity == 'MEDIUM': 
+                medium += 1
+            elif severity == 'LOW': 
+                low += 1
+            else: 
+                unknown += 1
+    
+    total = critical + high + medium + low + unknown
+    print(f"Backend - Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})")
+except:
+    print("Backend - Scan error")
+EOF
                             """
                         }
                     }
@@ -184,7 +200,7 @@ print(f'Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: 
     post {
         always {
             chuckNorris()
-            sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml'
+            sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml frontend-scan.json backend-scan.json'
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
