@@ -80,7 +80,7 @@ pipeline {
                                 """
                             }
                             
-                            // Scanner de vulnerabilidades para Frontend
+                            // Scanner de vulnerabilidades para Frontend - SCAN COMPLETO (todas as severidades)
                             sh """
                                 echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
                                 TMPDIR=${TRIVY_TEMP_DIR} ${trivyCmd} image \
@@ -88,13 +88,12 @@ pipeline {
                                     --skip-db-update \
                                     --format table \
                                     --exit-code 0 \
-                                    --severity HIGH,CRITICAL \
                                     --no-progress \
                                     --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
-                            // Gera relatório em formato JSON
+                            // Gera relatório em formato JSON - TODAS AS SEVERIDADES
                             sh """
                                 echo "📄 Gerando relatório JSON do Frontend..."
                                 TMPDIR=${TRIVY_TEMP_DIR} ${trivyCmd} image \
@@ -102,91 +101,160 @@ pipeline {
                                     --skip-db-update \
                                     --format json \
                                     --output frontend-vulnerability-report.json \
-                                    --severity HIGH,CRITICAL \
                                     --no-progress \
                                     --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                             """
                             
-                            // Análise detalhada das vulnerabilidades
+                            // Análise detalhada das vulnerabilidades - MÉTODO MELHORADO
                             script {
-                                def criticalCount = sh(
+                                def vulnerabilityAnalysis = sh(
                                     script: """
                                         if [ -f frontend-vulnerability-report.json ]; then
-                                            grep -o '"Severity":"CRITICAL"' frontend-vulnerability-report.json | wc -l || echo "0"
-                                        else
-                                            echo "0"
-                                        fi
-                                    """,
-                                    returnStdout: true
-                                ).trim()
-                                
-                                def highCount = sh(
-                                    script: """
-                                        if [ -f frontend-vulnerability-report.json ]; then
-                                            grep -o '"Severity":"HIGH"' frontend-vulnerability-report.json | wc -l || echo "0"
-                                        else
-                                            echo "0"
-                                        fi
-                                    """,
-                                    returnStdout: true
-                                ).trim()
-                                
-                                def totalVulns = criticalCount.toInteger() + highCount.toInteger()
-                                
-                                echo "🔍 === RELATÓRIO DE SEGURANÇA - FRONTEND ==="
-                                echo "📊 Total de vulnerabilidades encontradas: ${totalVulns}"
-                                echo "🔴 Vulnerabilidades CRÍTICAS: ${criticalCount}"
-                                echo "🟡 Vulnerabilidades HIGH: ${highCount}"
-                                
-                                // Lista as vulnerabilidades encontradas
-                                if (totalVulns > 0) {
-                                    echo "📋 Detalhes das vulnerabilidades:"
-                                    def vulnDetails = sh(
-                                        script: """
-                                            if [ -f frontend-vulnerability-report.json ]; then
-                                                python3 -c "
+                                            python3 -c "
 import json
 import sys
+
 try:
     with open('frontend-vulnerability-report.json', 'r') as f:
         data = json.load(f)
+    
+    # Contadores
+    critical_count = 0
+    high_count = 0
+    medium_count = 0
+    low_count = 0
+    unknown_count = 0
+    total_vulns = 0
+    
+    # Lista para armazenar detalhes
+    vulnerabilities = []
     
     if 'Results' in data and data['Results']:
         for result in data['Results']:
             if 'Vulnerabilities' in result and result['Vulnerabilities']:
                 for vuln in result['Vulnerabilities']:
-                    severity = vuln.get('Severity', 'N/A')
+                    total_vulns += 1
+                    severity = vuln.get('Severity', 'UNKNOWN').upper()
                     vuln_id = vuln.get('VulnerabilityID', 'N/A')
                     pkg_name = vuln.get('PkgName', 'N/A')
                     title = vuln.get('Title', 'N/A')
-                    print(f'  • {severity}: {vuln_id} em {pkg_name} - {title}')
-    else:
-        print('  Nenhuma vulnerabilidade encontrada no arquivo JSON')
+                    
+                    # Contagem por severidade
+                    if severity == 'CRITICAL':
+                        critical_count += 1
+                    elif severity == 'HIGH':
+                        high_count += 1
+                    elif severity == 'MEDIUM':
+                        medium_count += 1
+                    elif severity == 'LOW':
+                        low_count += 1
+                    else:
+                        unknown_count += 1
+                    
+                    # Adiciona à lista de vulnerabilidades
+                    vulnerabilities.append({
+                        'severity': severity,
+                        'id': vuln_id,
+                        'package': pkg_name,
+                        'title': title
+                    })
+    
+    # Output em formato que o Jenkins pode processar
+    print(f'TOTAL_VULNS={total_vulns}')
+    print(f'CRITICAL_COUNT={critical_count}')
+    print(f'HIGH_COUNT={high_count}')
+    print(f'MEDIUM_COUNT={medium_count}')
+    print(f'LOW_COUNT={low_count}')
+    print(f'UNKNOWN_COUNT={unknown_count}')
+    
+    # Lista vulnerabilidades críticas e high
+    if critical_count > 0 or high_count > 0:
+        print('CRITICAL_HIGH_DETAILS:')
+        for vuln in vulnerabilities:
+            if vuln['severity'] in ['CRITICAL', 'HIGH']:
+                print(f\"  • {vuln['severity']}: {vuln['id']} em {vuln['package']} - {vuln['title']}\")
+    
 except Exception as e:
-    print(f'  Erro ao analisar JSON: {e}')
-                                                " 2>/dev/null || echo "  Erro: Python não disponível para análise detalhada"
-                                            else
-                                                echo "  Arquivo de relatório não encontrado"
-                                            fi
-                                        """,
-                                        returnStdout: true
-                                    ).trim()
-                                    echo vulnDetails
+    print(f'ERROR: {str(e)}')
+    print('TOTAL_VULNS=0')
+    print('CRITICAL_COUNT=0')
+    print('HIGH_COUNT=0')
+    print('MEDIUM_COUNT=0')
+    print('LOW_COUNT=0')
+    print('UNKNOWN_COUNT=0')
+                                            " 2>/dev/null || echo "ERROR: Python não disponível"
+                                        else
+                                            echo "ERROR: Arquivo frontend-vulnerability-report.json não encontrado"
+                                            echo "TOTAL_VULNS=0"
+                                            echo "CRITICAL_COUNT=0"
+                                            echo "HIGH_COUNT=0"
+                                            echo "MEDIUM_COUNT=0"
+                                            echo "LOW_COUNT=0"
+                                            echo "UNKNOWN_COUNT=0"
+                                        fi
+                                    """,
+                                    returnStdout: true
+                                ).trim()
+                                
+                                // Parse do resultado
+                                def vulnData = [:]
+                                def vulnDetails = []
+                                def inDetails = false
+                                
+                                vulnerabilityAnalysis.split('\n').each { line ->
+                                    if (line.startsWith('CRITICAL_HIGH_DETAILS:')) {
+                                        inDetails = true
+                                    } else if (inDetails && line.startsWith('  •')) {
+                                        vulnDetails.add(line)
+                                    } else if (line.contains('=')) {
+                                        def parts = line.split('=')
+                                        if (parts.length == 2) {
+                                            vulnData[parts[0]] = parts[1]
+                                        }
+                                    }
+                                }
+                                
+                                def totalVulns = vulnData.get('TOTAL_VULNS', '0').toInteger()
+                                def criticalCount = vulnData.get('CRITICAL_COUNT', '0').toInteger()
+                                def highCount = vulnData.get('HIGH_COUNT', '0').toInteger()
+                                def mediumCount = vulnData.get('MEDIUM_COUNT', '0').toInteger()
+                                def lowCount = vulnData.get('LOW_COUNT', '0').toInteger()
+                                def unknownCount = vulnData.get('UNKNOWN_COUNT', '0').toInteger()
+                                
+                                echo "🔍 === RELATÓRIO DE SEGURANÇA - FRONTEND ==="
+                                echo "📊 Total de vulnerabilidades encontradas: ${totalVulns}"
+                                echo "🔴 Vulnerabilidades CRÍTICAS: ${criticalCount}"
+                                echo "🟡 Vulnerabilidades HIGH: ${highCount}"
+                                echo "🟠 Vulnerabilidades MEDIUM: ${mediumCount}"
+                                echo "🟢 Vulnerabilidades LOW: ${lowCount}"
+                                if (unknownCount > 0) {
+                                    echo "❓ Vulnerabilidades UNKNOWN: ${unknownCount}"
+                                }
+                                
+                                // Lista as vulnerabilidades críticas e high
+                                if (criticalCount > 0 || highCount > 0) {
+                                    echo "📋 Detalhes das vulnerabilidades CRÍTICAS e HIGH:"
+                                    vulnDetails.each { detail ->
+                                        echo detail
+                                    }
                                 }
                                 
                                 // Define o status do build baseado nas vulnerabilidades
-                                if (criticalCount.toInteger() > 0) {
+                                if (criticalCount > 0) {
                                     echo "🚨 FALHA: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Frontend!"
                                     echo "❌ Build será marcado como FALHADO devido a vulnerabilidades críticas"
                                     currentBuild.result = 'FAILURE'
                                     error("Vulnerabilidades críticas encontradas - build interrompido")
-                                } else if (highCount.toInteger() > 0) {
+                                } else if (highCount > 0) {
                                     echo "⚠️ ATENÇÃO: ${highCount} vulnerabilidades HIGH encontradas no Frontend!"
                                     echo "🟡 Build será marcado como INSTÁVEL"
                                     currentBuild.result = 'UNSTABLE'
+                                } else if (totalVulns > 0) {
+                                    echo "ℹ️ INFO: ${totalVulns} vulnerabilidades de severidade MEDIUM/LOW encontradas"
+                                    echo "✅ Build pode prosseguir - vulnerabilidades não críticas"
                                 } else {
-                                    echo "✅ Nenhuma vulnerabilidade crítica ou alta encontrada no Frontend"
+                                    echo "✅ Nenhuma vulnerabilidade encontrada no Frontend"
                                 }
                                 echo "============================================="
                             }
@@ -224,7 +292,7 @@ except Exception as e:
                                 """
                             }
                             
-                            // Scanner de vulnerabilidades para Backend
+                            // Scanner de vulnerabilidades para Backend - SCAN COMPLETO
                             sh """
                                 echo "🔍 Executando scanner de vulnerabilidades no Backend..."
                                 TMPDIR=${TRIVY_TEMP_DIR}-backend ${trivyCmd} image \
@@ -232,13 +300,12 @@ except Exception as e:
                                     --skip-db-update \
                                     --format table \
                                     --exit-code 0 \
-                                    --severity HIGH,CRITICAL \
                                     --no-progress \
                                     --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
-                            // Gera relatório em formato JSON
+                            // Gera relatório em formato JSON - TODAS AS SEVERIDADES
                             sh """
                                 echo "📄 Gerando relatório JSON do Backend..."
                                 TMPDIR=${TRIVY_TEMP_DIR}-backend ${trivyCmd} image \
@@ -246,91 +313,160 @@ except Exception as e:
                                     --skip-db-update \
                                     --format json \
                                     --output backend-vulnerability-report.json \
-                                    --severity HIGH,CRITICAL \
                                     --no-progress \
                                     --timeout 10m \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                             """
                             
-                            // Análise detalhada das vulnerabilidades
+                            // Análise detalhada das vulnerabilidades - MÉTODO MELHORADO
                             script {
-                                def criticalCount = sh(
+                                def vulnerabilityAnalysis = sh(
                                     script: """
                                         if [ -f backend-vulnerability-report.json ]; then
-                                            grep -o '"Severity":"CRITICAL"' backend-vulnerability-report.json | wc -l || echo "0"
-                                        else
-                                            echo "0"
-                                        fi
-                                    """,
-                                    returnStdout: true
-                                ).trim()
-                                
-                                def highCount = sh(
-                                    script: """
-                                        if [ -f backend-vulnerability-report.json ]; then
-                                            grep -o '"Severity":"HIGH"' backend-vulnerability-report.json | wc -l || echo "0"
-                                        else
-                                            echo "0"
-                                        fi
-                                    """,
-                                    returnStdout: true
-                                ).trim()
-                                
-                                def totalVulns = criticalCount.toInteger() + highCount.toInteger()
-                                
-                                echo "🔍 === RELATÓRIO DE SEGURANÇA - BACKEND ==="
-                                echo "📊 Total de vulnerabilidades encontradas: ${totalVulns}"
-                                echo "🔴 Vulnerabilidades CRÍTICAS: ${criticalCount}"
-                                echo "🟡 Vulnerabilidades HIGH: ${highCount}"
-                                
-                                // Lista as vulnerabilidades encontradas
-                                if (totalVulns > 0) {
-                                    echo "📋 Detalhes das vulnerabilidades:"
-                                    def vulnDetails = sh(
-                                        script: """
-                                            if [ -f backend-vulnerability-report.json ]; then
-                                                python3 -c "
+                                            python3 -c "
 import json
 import sys
+
 try:
     with open('backend-vulnerability-report.json', 'r') as f:
         data = json.load(f)
+    
+    # Contadores
+    critical_count = 0
+    high_count = 0
+    medium_count = 0
+    low_count = 0
+    unknown_count = 0
+    total_vulns = 0
+    
+    # Lista para armazenar detalhes
+    vulnerabilities = []
     
     if 'Results' in data and data['Results']:
         for result in data['Results']:
             if 'Vulnerabilities' in result and result['Vulnerabilities']:
                 for vuln in result['Vulnerabilities']:
-                    severity = vuln.get('Severity', 'N/A')
+                    total_vulns += 1
+                    severity = vuln.get('Severity', 'UNKNOWN').upper()
                     vuln_id = vuln.get('VulnerabilityID', 'N/A')
                     pkg_name = vuln.get('PkgName', 'N/A')
                     title = vuln.get('Title', 'N/A')
-                    print(f'  • {severity}: {vuln_id} em {pkg_name} - {title}')
-    else:
-        print('  Nenhuma vulnerabilidade encontrada no arquivo JSON')
+                    
+                    # Contagem por severidade
+                    if severity == 'CRITICAL':
+                        critical_count += 1
+                    elif severity == 'HIGH':
+                        high_count += 1
+                    elif severity == 'MEDIUM':
+                        medium_count += 1
+                    elif severity == 'LOW':
+                        low_count += 1
+                    else:
+                        unknown_count += 1
+                    
+                    # Adiciona à lista de vulnerabilidades
+                    vulnerabilities.append({
+                        'severity': severity,
+                        'id': vuln_id,
+                        'package': pkg_name,
+                        'title': title
+                    })
+    
+    # Output em formato que o Jenkins pode processar
+    print(f'TOTAL_VULNS={total_vulns}')
+    print(f'CRITICAL_COUNT={critical_count}')
+    print(f'HIGH_COUNT={high_count}')
+    print(f'MEDIUM_COUNT={medium_count}')
+    print(f'LOW_COUNT={low_count}')
+    print(f'UNKNOWN_COUNT={unknown_count}')
+    
+    # Lista vulnerabilidades críticas e high
+    if critical_count > 0 or high_count > 0:
+        print('CRITICAL_HIGH_DETAILS:')
+        for vuln in vulnerabilities:
+            if vuln['severity'] in ['CRITICAL', 'HIGH']:
+                print(f\"  • {vuln['severity']}: {vuln['id']} em {vuln['package']} - {vuln['title']}\")
+    
 except Exception as e:
-    print(f'  Erro ao analisar JSON: {e}')
-                                                " 2>/dev/null || echo "  Erro: Python não disponível para análise detalhada"
-                                            else
-                                                echo "  Arquivo de relatório não encontrado"
-                                            fi
-                                        """,
-                                        returnStdout: true
-                                    ).trim()
-                                    echo vulnDetails
+    print(f'ERROR: {str(e)}')
+    print('TOTAL_VULNS=0')
+    print('CRITICAL_COUNT=0')
+    print('HIGH_COUNT=0')
+    print('MEDIUM_COUNT=0')
+    print('LOW_COUNT=0')
+    print('UNKNOWN_COUNT=0')
+                                            " 2>/dev/null || echo "ERROR: Python não disponível"
+                                        else
+                                            echo "ERROR: Arquivo backend-vulnerability-report.json não encontrado"
+                                            echo "TOTAL_VULNS=0"
+                                            echo "CRITICAL_COUNT=0"
+                                            echo "HIGH_COUNT=0"
+                                            echo "MEDIUM_COUNT=0"
+                                            echo "LOW_COUNT=0"
+                                            echo "UNKNOWN_COUNT=0"
+                                        fi
+                                    """,
+                                    returnStdout: true
+                                ).trim()
+                                
+                                // Parse do resultado
+                                def vulnData = [:]
+                                def vulnDetails = []
+                                def inDetails = false
+                                
+                                vulnerabilityAnalysis.split('\n').each { line ->
+                                    if (line.startsWith('CRITICAL_HIGH_DETAILS:')) {
+                                        inDetails = true
+                                    } else if (inDetails && line.startsWith('  •')) {
+                                        vulnDetails.add(line)
+                                    } else if (line.contains('=')) {
+                                        def parts = line.split('=')
+                                        if (parts.length == 2) {
+                                            vulnData[parts[0]] = parts[1]
+                                        }
+                                    }
+                                }
+                                
+                                def totalVulns = vulnData.get('TOTAL_VULNS', '0').toInteger()
+                                def criticalCount = vulnData.get('CRITICAL_COUNT', '0').toInteger()
+                                def highCount = vulnData.get('HIGH_COUNT', '0').toInteger()
+                                def mediumCount = vulnData.get('MEDIUM_COUNT', '0').toInteger()
+                                def lowCount = vulnData.get('LOW_COUNT', '0').toInteger()
+                                def unknownCount = vulnData.get('UNKNOWN_COUNT', '0').toInteger()
+                                
+                                echo "🔍 === RELATÓRIO DE SEGURANÇA - BACKEND ==="
+                                echo "📊 Total de vulnerabilidades encontradas: ${totalVulns}"
+                                echo "🔴 Vulnerabilidades CRÍTICAS: ${criticalCount}"
+                                echo "🟡 Vulnerabilidades HIGH: ${highCount}"
+                                echo "🟠 Vulnerabilidades MEDIUM: ${mediumCount}"
+                                echo "🟢 Vulnerabilidades LOW: ${lowCount}"
+                                if (unknownCount > 0) {
+                                    echo "❓ Vulnerabilidades UNKNOWN: ${unknownCount}"
+                                }
+                                
+                                // Lista as vulnerabilidades críticas e high
+                                if (criticalCount > 0 || highCount > 0) {
+                                    echo "📋 Detalhes das vulnerabilidades CRÍTICAS e HIGH:"
+                                    vulnDetails.each { detail ->
+                                        echo detail
+                                    }
                                 }
                                 
                                 // Define o status do build baseado nas vulnerabilidades
-                                if (criticalCount.toInteger() > 0) {
+                                if (criticalCount > 0) {
                                     echo "🚨 FALHA: ${criticalCount} vulnerabilidades CRÍTICAS encontradas no Backend!"
                                     echo "❌ Build será marcado como FALHADO devido a vulnerabilidades críticas"
                                     currentBuild.result = 'FAILURE'
                                     error("Vulnerabilidades críticas encontradas - build interrompido")
-                                } else if (highCount.toInteger() > 0) {
+                                } else if (highCount > 0) {
                                     echo "⚠️ ATENÇÃO: ${highCount} vulnerabilidades HIGH encontradas no Backend!"
                                     echo "🟡 Build será marcado como INSTÁVEL"
                                     currentBuild.result = 'UNSTABLE'
+                                } else if (totalVulns > 0) {
+                                    echo "ℹ️ INFO: ${totalVulns} vulnerabilidades de severidade MEDIUM/LOW encontradas"
+                                    echo "✅ Build pode prosseguir - vulnerabilidades não críticas"
                                 } else {
-                                    echo "✅ Nenhuma vulnerabilidade crítica ou alta encontrada no Backend"
+                                    echo "✅ Nenhuma vulnerabilidade encontrada no Backend"
                                 }
                                 echo "============================================="
                             }
@@ -343,7 +479,7 @@ except Exception as e:
                     // Arquiva os relatórios de vulnerabilidades
                     archiveArtifacts artifacts: '*-vulnerability-report.json', allowEmptyArchive: true
                     
-                    // Cria um resumo das vulnerabilidades
+                    // Cria um resumo das vulnerabilidades - VERSÃO MELHORADA
                     script {
                         sh """
                             echo "=== RESUMO DE SEGURANÇA ===" > security-summary.txt
@@ -351,28 +487,62 @@ except Exception as e:
                             echo "Build: ${BUILD_TAG}" >> security-summary.txt
                             echo "" >> security-summary.txt
                             
-                            # Frontend
-                            echo "FRONTEND:" >> security-summary.txt
-                            if [ -f frontend-vulnerability-report.json ]; then
-                                CRITICAL=\$(grep -o '"Severity":"CRITICAL"' frontend-vulnerability-report.json | wc -l || echo "0")
-                                HIGH=\$(grep -o '"Severity":"HIGH"' frontend-vulnerability-report.json | wc -l || echo "0")
-                                echo "  - Críticas: \$CRITICAL" >> security-summary.txt
-                                echo "  - High: \$HIGH" >> security-summary.txt
-                            else
-                                echo "  - Não escaneado" >> security-summary.txt
-                            fi
+                            # Função para analisar JSON
+                            analyze_json() {
+                                local json_file=\$1
+                                local component=\$2
+                                
+                                if [ -f "\$json_file" ]; then
+                                    python3 -c "
+import json
+import sys
+
+try:
+    with open('\$json_file', 'r') as f:
+        data = json.load(f)
+    
+    critical = high = medium = low = unknown = total = 0
+    
+    if 'Results' in data and data['Results']:
+        for result in data['Results']:
+            if 'Vulnerabilities' in result and result['Vulnerabilities']:
+                for vuln in result['Vulnerabilities']:
+                    total += 1
+                    severity = vuln.get('Severity', 'UNKNOWN').upper()
+                    if severity == 'CRITICAL':
+                        critical += 1
+                    elif severity == 'HIGH':
+                        high += 1
+                    elif severity == 'MEDIUM':
+                        medium += 1
+                    elif severity == 'LOW':
+                        low += 1
+                    else:
+                        unknown += 1
+    
+    print(f'\$component:')
+    print(f'  - Total: {total}')
+    print(f'  - Críticas: {critical}')
+    print(f'  - High: {high}')
+    print(f'  - Medium: {medium}')
+    print(f'  - Low: {low}')
+    if unknown > 0:
+        print(f'  - Unknown: {unknown}')
+
+except Exception as e:
+    print(f'\$component:')
+    print(f'  - Erro ao analisar: {str(e)}')
+                                    " 2>/dev/null || echo "\$component: Erro - Python não disponível"
+                                else
+                                    echo "\$component: Não escaneado"
+                                fi
+                            }
                             
-                            # Backend
-                            echo "BACKEND:" >> security-summary.txt
-                            if [ -f backend-vulnerability-report.json ]; then
-                                CRITICAL=\$(grep -o '"Severity":"CRITICAL"' backend-vulnerability-report.json | wc -l || echo "0")
-                                HIGH=\$(grep -o '"Severity":"HIGH"' backend-vulnerability-report.json | wc -l || echo "0")
-                                echo "  - Críticas: \$CRITICAL" >> security-summary.txt
-                                echo "  - High: \$HIGH" >> security-summary.txt
-                            else
-                                echo "  - Não escaneado" >> security-summary.txt
-                            fi
+                            # Análise Frontend e Backend
+                            analyze_json "frontend-vulnerability-report.json" "FRONTEND" >> security-summary.txt
+                            analyze_json "backend-vulnerability-report.json" "BACKEND" >> security-summary.txt
                             
+                            echo "" >> security-summary.txt
                             echo "=========================" >> security-summary.txt
                             cat security-summary.txt
                         """
@@ -467,4 +637,4 @@ except Exception as e:
             echo '💡 Deploy pode prosseguir, mas recomenda-se correção das vulnerabilidades'
         }
     }
-}
+    
