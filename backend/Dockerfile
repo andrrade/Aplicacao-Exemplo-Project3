@@ -1,5 +1,15 @@
-FROM python:3.10-slim
+# Backend Dockerfile (para teste de vulnerabilidades)
+FROM python:3.10
 WORKDIR /app
+
+# Instala alguns pacotes que podem ter vulnerabilidades
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    libssl-dev \
+    zlib1g-dev
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

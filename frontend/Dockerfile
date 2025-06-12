@@ -1,12 +1,12 @@
-# Dockerfile Frontend (salvar como Dockerfile na pasta frontend)
-FROM node:18-alpine as build
+# Frontend Dockerfile (para teste de vulnerabilidades)
+FROM node:18 as build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:alpine
+FROM nginx:latest
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 3000
 
