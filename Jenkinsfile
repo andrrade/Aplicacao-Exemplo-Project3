@@ -67,22 +67,36 @@ pipeline {
                                     export PATH="\$HOME/bin:\$PATH"
                                     mkdir -p ${TRIVY_CACHE_DIR}
                                     
-                                    echo "=== RELATÓRIO DE VULNERABILIDADES - FRONTEND ==="
-                                    echo "📊 Resumo:"
+                                    echo "=== DIAGNÓSTICO TRIVY - FRONTEND ==="
+                                    echo "🔧 Versão do Trivy:"
+                                    trivy --version
+                                    
+                                    echo ""
+                                    echo "🗂️ Limpando cache do Trivy para forçar atualização da DB..."
+                                    trivy clean --cache-dir ${TRIVY_CACHE_DIR} || echo "Cache já limpo"
+                                    
+                                    echo ""
+                                    echo "📊 Scanner completo (sem filtros de severidade):"
                                     trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                         --format table \
                                         --exit-code 0 \
-                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --no-progress \
+                                        --timeout 10m \
                                         ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
                                     
                                     echo ""
-                                    echo "🔍 Detalhes das vulnerabilidades (se houver):"
+                                    echo "🔍 Scanner com severidades específicas:"
                                     trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                         --format table \
                                         --exit-code 0 \
                                         --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                        --list-all-pkgs \
-                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} || echo "✅ Nenhuma vulnerabilidade encontrada ou erro no scanner"
+                                        --no-progress \
+                                        --timeout 10m \
+                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                    
+                                    echo ""
+                                    echo "📋 Info da imagem:"
+                                    docker inspect ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} --format='{{.RepoTags}} {{.Created}} {{.Size}}' || echo "Erro ao inspecionar imagem"
                                     echo "=== FIM DO RELATÓRIO FRONTEND ==="
                                 """
                                 
@@ -114,22 +128,36 @@ pipeline {
                                     export PATH="\$HOME/bin:\$PATH"
                                     mkdir -p ${TRIVY_CACHE_DIR}
                                     
-                                    echo "=== RELATÓRIO DE VULNERABILIDADES - BACKEND ==="
-                                    echo "📊 Resumo:"
+                                    echo "=== DIAGNÓSTICO TRIVY - BACKEND ==="
+                                    echo "🔧 Versão do Trivy:"
+                                    trivy --version
+                                    
+                                    echo ""
+                                    echo "🗂️ Limpando cache do Trivy para forçar atualização da DB..."
+                                    trivy clean --cache-dir ${TRIVY_CACHE_DIR} || echo "Cache já limpo"
+                                    
+                                    echo ""
+                                    echo "📊 Scanner completo (sem filtros de severidade):"
                                     trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                         --format table \
                                         --exit-code 0 \
-                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --no-progress \
+                                        --timeout 10m \
                                         ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
                                     
                                     echo ""
-                                    echo "🔍 Detalhes das vulnerabilidades (se houver):"
+                                    echo "🔍 Scanner com severidades específicas:"
                                     trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                         --format table \
                                         --exit-code 0 \
                                         --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                        --list-all-pkgs \
-                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} || echo "✅ Nenhuma vulnerabilidade encontrada ou erro no scanner"
+                                        --no-progress \
+                                        --timeout 10m \
+                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                                    
+                                    echo ""
+                                    echo "📋 Info da imagem:"
+                                    docker inspect ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} --format='{{.RepoTags}} {{.Created}} {{.Size}}' || echo "Erro ao inspecionar imagem"
                                     echo "=== FIM DO RELATÓRIO BACKEND ==="
                                 """
                                 
