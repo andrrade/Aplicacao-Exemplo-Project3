@@ -62,6 +62,19 @@ pipeline {
                             
                             echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
                             
+                            // Primeiro, vamos verificar se a imagem existe e suas informações
+                            sh """
+                                export PATH="\$HOME/bin:\$PATH"
+                                echo "========================================"
+                                echo "INFORMAÇÕES DA IMAGEM FRONTEND"
+                                echo "========================================"
+                                echo "Imagem: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
+                                docker images | grep "${DOCKERHUB_REPO}/meu-frontend" || echo "Imagem não encontrada localmente"
+                                echo ""
+                                echo "Inspecionando a imagem:"
+                                docker inspect ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} | head -20 || echo "Erro ao inspecionar imagem"
+                            """
+                            
                             // Scanner da imagem frontend com saída direta no console
                             sh """
                                 export PATH="\$HOME/bin:\$PATH"
@@ -69,14 +82,19 @@ pipeline {
                                 echo "========================================"
                                 echo "RELATÓRIO DE VULNERABILIDADES - FRONTEND"
                                 echo "========================================"
+                                echo "Executando: trivy image ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
                                     --exit-code 0 \
                                     --severity LOW,MEDIUM,HIGH,CRITICAL \
                                     --output frontend-scan-output.txt \
+                                    --debug \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                echo ""
                                 echo "Exibindo resultado do scan:"
                                 cat frontend-scan-output.txt
+                                echo ""
+                                echo "Tamanho do arquivo de saída: \$(wc -l < frontend-scan-output.txt) linhas"
                             """
                             
                             // Gera relatório JSON para análise posterior (opcional)
@@ -108,6 +126,19 @@ pipeline {
                             
                             echo "🔍 Executando scanner de vulnerabilidades no Backend..."
                             
+                            // Primeiro, vamos verificar se a imagem existe e suas informações
+                            sh """
+                                export PATH="\$HOME/bin:\$PATH"
+                                echo "======================================="
+                                echo "INFORMAÇÕES DA IMAGEM BACKEND"
+                                echo "======================================="
+                                echo "Imagem: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
+                                docker images | grep "${DOCKERHUB_REPO}/meu-backend" || echo "Imagem não encontrada localmente"
+                                echo ""
+                                echo "Inspecionando a imagem:"
+                                docker inspect ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} | head -20 || echo "Erro ao inspecionar imagem"
+                            """
+                            
                             // Scanner da imagem backend com saída direta no console
                             sh """
                                 export PATH="\$HOME/bin:\$PATH"
@@ -115,14 +146,19 @@ pipeline {
                                 echo "======================================="
                                 echo "RELATÓRIO DE VULNERABILIDADES - BACKEND"
                                 echo "======================================="
+                                echo "Executando: trivy image ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
                                     --exit-code 0 \
                                     --severity LOW,MEDIUM,HIGH,CRITICAL \
                                     --output backend-scan-output.txt \
+                                    --debug \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                                echo ""
                                 echo "Exibindo resultado do scan:"
                                 cat backend-scan-output.txt
+                                echo ""
+                                echo "Tamanho do arquivo de saída: \$(wc -l < backend-scan-output.txt) linhas"
                             """
                             
                             // Gera relatório JSON para análise posterior (opcional)
