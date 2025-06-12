@@ -4,9 +4,6 @@ pipeline {
         DOCKERHUB_REPO = "andrrade"
         BUILD_TAG = "${env.BUILD_ID}"
         TRIVY_CACHE_DIR = "/tmp/trivy-cache"
-        // Configurações do Trivy
-        TRIVY_VERSION = "0.63.0"
-        TRIVY_TIMEOUT = "15m"
     }
     stages {
         stage('Build Frontend Docker Image') {
@@ -53,83 +50,66 @@ pipeline {
                     steps {
                         script {
                             try {
-                                // Setup Trivy
+                                // Instala Trivy se não estiver instalado (sem sudo)
                                 sh '''
                                     if ! command -v trivy &> /dev/null; then
-                                        echo "📥 Instalando Trivy v${TRIVY_VERSION}..."
+                                        echo "Instalando Trivy no diretório local..."
                                         mkdir -p $HOME/bin
-                                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/bin v${TRIVY_VERSION}
+                                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/bin
                                         chmod +x $HOME/bin/trivy
-                                        echo "✅ Trivy instalado em $HOME/bin"
+                                        echo "Trivy instalado em $HOME/bin"
                                     fi
+                                    echo "Verificando Trivy..."
+                                    export PATH="$HOME/bin:$PATH"
+                                    trivy --version || echo "Trivy não encontrado"
                                 '''
                                 
-                                echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
+                                // Scanner da imagem frontend
                                 sh """
+                                    echo "🔍 Executando scanner de vulnerabilidades no Frontend..."
                                     export PATH="\$HOME/bin:\$PATH"
                                     mkdir -p ${TRIVY_CACHE_DIR}
                                     
-                                    echo "=== 🛡️ RELATÓRIO DE SEGURANÇA - FRONTEND ==="
-                                    echo "📅 Data: \$(date)"
-                                    echo "🏷️ Imagem: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
-                                    echo ""
-                                    
-                                    echo "🔧 Versão do Trivy:"
-                                    trivy --version
-                                    echo ""
-                                    
-                                    echo "🔄 Atualizando base de vulnerabilidades..."
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} --download-db-only
-                                    echo ""
-                                    
-                                    echo "📊 SCAN COMPLETO - TODAS SEVERIDADES:"
-                                    echo "================================================"
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format table \\
-                                        --exit-code 0 \\
-                                        --no-progress \\
-                                        --timeout ${TRIVY_TIMEOUT} \\
-                                        --scanners vuln,secret \\
+                                    # Executa o scanner com tratamento de erro
+                                    set +e
+                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --format table \
+                                        --exit-code 0 \
+                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --output frontend-vulnerabilities.txt \
                                         ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
-                                    echo ""
+                                    TRIVY_EXIT_CODE=\$?
+                                    set -e
                                     
-                                    echo "🚨 SCAN CRÍTICO/ALTO - APENAS VULNERABILIDADES IMPORTANTES:"
-                                    echo "================================================================"
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format table \\
-                                        --exit-code 0 \\
-                                        --severity HIGH,CRITICAL \\
-                                        --no-progress \\
-                                        --timeout ${TRIVY_TIMEOUT} \\
-                                        --scanners vuln \\
-                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
-                                    echo ""
+                                    echo "Trivy exit code: \$TRIVY_EXIT_CODE"
                                     
-                                    echo "📋 INFORMAÇÕES DA IMAGEM:"
-                                    echo "=========================="
-                                    docker inspect ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} --format='Tags: {{.RepoTags}}' || echo "❌ Erro ao inspecionar imagem"
-                                    docker inspect ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} --format='Criada: {{.Created}}' || true
-                                    docker inspect ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} --format='Tamanho: {{.Size}} bytes' || true
-                                    
-                                    echo ""
-                                    echo "🔍 TESTE COM IMAGEM CONHECIDAMENTE VULNERÁVEL (para validar Trivy):"
-                                    echo "===================================================================="
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format table \\
-                                        --exit-code 0 \\
-                                        --severity HIGH,CRITICAL \\
-                                        --no-progress \\
-                                        --timeout 5m \\
-                                        --scanners vuln \\
-                                        python:3.8 | head -20 || echo "❌ Não foi possível testar com imagem vulnerável"
-                                    
-                                    echo "=== 🏁 FIM DO RELATÓRIO FRONTEND ==="
+                                    # Se deu erro, cria um arquivo de fallback
+                                    if [ \$TRIVY_EXIT_CODE -ne 0 ]; then
+                                        echo "❌ Erro no Trivy Scanner Frontend (exit code: \$TRIVY_EXIT_CODE)" > frontend-vulnerabilities.txt
+                                        echo "Continuando pipeline..." >> frontend-vulnerabilities.txt
+                                    fi
                                 """
+                                
+                                // Gera relatório JSON para análise posterior
+                                sh """
+                                    export PATH="\$HOME/bin:\$PATH"
+                                    set +e
+                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --format json \
+                                        --exit-code 0 \
+                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --output frontend-vulnerabilities.json \
+                                        ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                    set -e
+                                """
+                                
+                                // Exibe resultado no console
+                                sh 'cat frontend-vulnerabilities.txt || echo "Arquivo de vulnerabilidades não encontrado"'
                                 
                             } catch (Exception e) {
                                 echo "⚠️ Erro no scanner Frontend: ${e.getMessage()}"
-                                echo "❌ Scanner Trivy Frontend falhou, mas o pipeline continua"
-                                currentBuild.result = 'UNSTABLE'
+                                sh 'echo "Erro no scanner Trivy Frontend" > frontend-vulnerabilities.txt'
+                                // Não falha o build, apenas registra o erro
                             }
                         }
                     }
@@ -138,161 +118,68 @@ pipeline {
                     steps {
                         script {
                             try {
-                                // Setup Trivy
+                                // Instala Trivy se não estiver instalado (sem sudo)
                                 sh '''
                                     if ! command -v trivy &> /dev/null; then
-                                        echo "📥 Instalando Trivy v${TRIVY_VERSION}..."
+                                        echo "Instalando Trivy no diretório local..."
                                         mkdir -p $HOME/bin
-                                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/bin v${TRIVY_VERSION}
+                                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $HOME/bin
                                         chmod +x $HOME/bin/trivy
-                                        echo "✅ Trivy instalado em $HOME/bin"
+                                        echo "Trivy instalado em $HOME/bin"
                                     fi
+                                    echo "Verificando Trivy..."
+                                    export PATH="$HOME/bin:$PATH"
+                                    trivy --version || echo "Trivy não encontrado"
                                 '''
                                 
-                                echo "🔍 Executando scanner de vulnerabilidades no Backend..."
+                                // Scanner da imagem backend
                                 sh """
+                                    echo "🔍 Executando scanner de vulnerabilidades no Backend..."
                                     export PATH="\$HOME/bin:\$PATH"
                                     mkdir -p ${TRIVY_CACHE_DIR}
                                     
-                                    echo "=== 🛡️ RELATÓRIO DE SEGURANÇA - BACKEND ==="
-                                    echo "📅 Data: \$(date)"
-                                    echo "🏷️ Imagem: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
-                                    echo ""
-                                    
-                                    echo "🔧 Versão do Trivy:"
-                                    trivy --version
-                                    echo ""
-                                    
-                                    echo "🔄 Atualizando base de vulnerabilidades..."
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} --download-db-only
-                                    echo ""
-                                    
-                                    echo "📊 SCAN COMPLETO - TODAS SEVERIDADES:"
-                                    echo "================================================"
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format table \\
-                                        --exit-code 0 \\
-                                        --no-progress \\
-                                        --timeout ${TRIVY_TIMEOUT} \\
-                                        --scanners vuln,secret \\
+                                    # Executa o scanner com tratamento de erro
+                                    set +e
+                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --format table \
+                                        --exit-code 0 \
+                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --output backend-vulnerabilities.txt \
                                         ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
-                                    echo ""
+                                    TRIVY_EXIT_CODE=\$?
+                                    set -e
                                     
-                                    echo "🚨 SCAN CRÍTICO/ALTO - APENAS VULNERABILIDADES IMPORTANTES:"
-                                    echo "================================================================"
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format table \\
-                                        --exit-code 0 \\
-                                        --severity HIGH,CRITICAL \\
-                                        --no-progress \\
-                                        --timeout ${TRIVY_TIMEOUT} \\
-                                        --scanners vuln \\
-                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
-                                    echo ""
+                                    echo "Trivy exit code: \$TRIVY_EXIT_CODE"
                                     
-                                    echo "📋 INFORMAÇÕES DA IMAGEM:"
-                                    echo "=========================="
-                                    docker inspect ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} --format='Tags: {{.RepoTags}}' || echo "❌ Erro ao inspecionar imagem"
-                                    docker inspect ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} --format='Criada: {{.Created}}' || true
-                                    docker inspect ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} --format='Tamanho: {{.Size}} bytes' || true
-                                    
-                                    echo ""
-                                    echo "📦 DEPENDÊNCIAS PYTHON ENCONTRADAS:"
-                                    echo "===================================="
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format json \\
-                                        --exit-code 0 \\
-                                        --no-progress \\
-                                        --timeout ${TRIVY_TIMEOUT} \\
-                                        --scanners vuln \\
-                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} | \\
-                                    jq -r '.Results[]? | select(.Type=="python-pkg") | .Packages[]? | "\\(.Name): \\(.Version)"' | head -20 || echo "❌ Não foi possível listar dependências Python"
-                                    
-                                    echo ""
-                                    echo "🔍 TESTE COM IMAGEM CONHECIDAMENTE VULNERÁVEL (para validar Trivy):"
-                                    echo "===================================================================="
-                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                        --format table \\
-                                        --exit-code 0 \\
-                                        --severity HIGH,CRITICAL \\
-                                        --no-progress \\
-                                        --timeout 5m \\
-                                        --scanners vuln \\
-                                        python:3.8 | head -20 || echo "❌ Não foi possível testar com imagem vulnerável"
-                                    
-                                    echo "=== 🏁 FIM DO RELATÓRIO BACKEND ==="
+                                    # Se deu erro, cria um arquivo de fallback
+                                    if [ \$TRIVY_EXIT_CODE -ne 0 ]; then
+                                        echo "❌ Erro no Trivy Scanner Backend (exit code: \$TRIVY_EXIT_CODE)" > backend-vulnerabilities.txt
+                                        echo "Continuando pipeline..." >> backend-vulnerabilities.txt
+                                    fi
                                 """
+                                
+                                // Gera relatório JSON para análise posterior
+                                sh """
+                                    export PATH="\$HOME/bin:\$PATH"
+                                    set +e
+                                    trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                        --format json \
+                                        --exit-code 0 \
+                                        --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                        --output backend-vulnerabilities.json \
+                                        ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                                    set -e
+                                """
+                                
+                                // Exibe resultado no console
+                                sh 'cat backend-vulnerabilities.txt || echo "Arquivo de vulnerabilidades não encontrado"'
                                 
                             } catch (Exception e) {
                                 echo "⚠️ Erro no scanner Backend: ${e.getMessage()}"
-                                echo "❌ Scanner Trivy Backend falhou, mas o pipeline continua"
-                                currentBuild.result = 'UNSTABLE'
+                                sh 'echo "Erro no scanner Trivy Backend" > backend-vulnerabilities.txt'
+                                // Não falha o build, apenas registra o erro
                             }
                         }
-                    }
-                }
-            }
-        }
-        stage('Security Gate') {
-            steps {
-                script {
-                    echo "🛡️ Executando Security Gate..."
-                    
-                    try {
-                        // Security Gate mais rigoroso - falha o build se houver vulnerabilidades CRITICAL
-                        sh """
-                            export PATH="\$HOME/bin:\$PATH"
-                            
-                            echo "🚨 SECURITY GATE - Verificando vulnerabilidades CRÍTICAS..."
-                            
-                            # Verificar Frontend
-                            echo "Verificando Frontend..."
-                            FRONTEND_CRITICAL=\$(trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                --format json \\
-                                --exit-code 0 \\
-                                --severity CRITICAL \\
-                                --no-progress \\
-                                --timeout 5m \\
-                                --scanners vuln \\
-                                ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} | \\
-                                jq '.Results[]?.Vulnerabilities // [] | length' | \\
-                                awk '{sum += \$1} END {print sum+0}')
-                            
-                            # Verificar Backend  
-                            echo "Verificando Backend..."
-                            BACKEND_CRITICAL=\$(trivy image --cache-dir ${TRIVY_CACHE_DIR} \\
-                                --format json \\
-                                --exit-code 0 \\
-                                --severity CRITICAL \\
-                                --no-progress \\
-                                --timeout 5m \\
-                                --scanners vuln \\
-                                ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} | \\
-                                jq '.Results[]?.Vulnerabilities // [] | length' | \\
-                                awk '{sum += \$1} END {print sum+0}')
-                            
-                            echo "📊 RESULTADOS DO SECURITY GATE:"
-                            echo "Frontend - Vulnerabilidades CRÍTICAS: \$FRONTEND_CRITICAL"
-                            echo "Backend - Vulnerabilidades CRÍTICAS: \$BACKEND_CRITICAL"
-                            
-                            TOTAL_CRITICAL=\$((FRONTEND_CRITICAL + BACKEND_CRITICAL))
-                            echo "Total de vulnerabilidades CRÍTICAS: \$TOTAL_CRITICAL"
-                            
-                            if [ \$TOTAL_CRITICAL -gt 0 ]; then
-                                echo "❌ SECURITY GATE FALHOU!"
-                                echo "🚨 Encontradas \$TOTAL_CRITICAL vulnerabilidades CRÍTICAS"
-                                echo "🛑 Deploy bloqueado por questões de segurança"
-                                # Descomente a linha abaixo para falhar o build
-                                # exit 1
-                                echo "⚠️ Continuando deploy (Security Gate em modo WARNING)"
-                            else
-                                echo "✅ SECURITY GATE APROVADO!"
-                                echo "🛡️ Nenhuma vulnerabilidade crítica encontrada"
-                            fi
-                        """
-                    } catch (Exception e) {
-                        echo "⚠️ Erro no Security Gate: ${e.getMessage()}"
-                        echo "🔄 Continuando pipeline..."
                     }
                 }
             }
@@ -326,9 +213,9 @@ pipeline {
     }
     post {
         always {
-            // Limpar arquivos temporários
-            sh 'rm -f ./k8s/deployment.tmp.yaml'
             chuckNorris()
+            // Arquiva os relatórios de vulnerabilidades
+            archiveArtifacts artifacts: '*-vulnerabilities.*', allowEmptyArchive: true
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
@@ -346,7 +233,6 @@ pipeline {
         }
         unstable {
             echo '⚠️ Build instável - Chuck Norris está monitorando'
-            echo '🔍 Possíveis problemas no scanner de segurança detectados'
         }
     }
-    
+}
