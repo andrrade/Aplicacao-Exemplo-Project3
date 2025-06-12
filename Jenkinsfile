@@ -73,7 +73,10 @@ pipeline {
                                     --format table \
                                     --exit-code 0 \
                                     --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output frontend-scan-output.txt \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                echo "Exibindo resultado do scan:"
+                                cat frontend-scan-output.txt
                             """
                             
                             // Gera relatório JSON para análise posterior (opcional)
@@ -116,7 +119,10 @@ pipeline {
                                     --format table \
                                     --exit-code 0 \
                                     --severity LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output backend-scan-output.txt \
                                     ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                                echo "Exibindo resultado do scan:"
+                                cat backend-scan-output.txt
                             """
                             
                             // Gera relatório JSON para análise posterior (opcional)
@@ -164,8 +170,8 @@ pipeline {
     post {
         always {
             chuckNorris()
-            // Arquiva os relatórios de vulnerabilidades JSON (opcional)
-            archiveArtifacts artifacts: '*-vulnerabilities.json', allowEmptyArchive: true
+            // Arquiva os relatórios de vulnerabilidades
+            archiveArtifacts artifacts: '*-vulnerabilities.json,*-scan-output.txt', allowEmptyArchive: true
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
