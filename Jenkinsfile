@@ -71,30 +71,85 @@ pipeline {
                                 echo "Imagem: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
                                 docker images | grep "${DOCKERHUB_REPO}/meu-frontend" || echo "Imagem não encontrada localmente"
                                 echo ""
+                                echo "Todas as imagens locais:"
+                                docker images
+                                echo ""
                                 echo "Inspecionando a imagem:"
                                 docker inspect ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} | head -20 || echo "Erro ao inspecionar imagem"
+                                echo ""
+                                echo "Verificando se conseguimos executar um container:"
+                                docker run --rm ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} echo "Container OK" || echo "Erro ao executar container"
                             """
                             
-                            // Scanner da imagem frontend com saída direta no console
+                            // Teste manual do Trivy com uma imagem conhecida por ter vulnerabilidades
+                            sh """
+                                export PATH="\$HOME/bin:\$PATH"
+                                echo "========================================"
+                                echo "TESTE COM IMAGEM CONHECIDA VULNERÁVEL"
+                                echo "========================================"
+                                echo "Testando Trivy com ubuntu:18.04 (conhecida por ter vulnerabilidades):"
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format table \
+                                    --exit-code 0 \
+                                    --severity HIGH,CRITICAL \
+                                    ubuntu:18.04 || echo "Erro no teste com ubuntu:18.04"
+                            """
+                            
+                            // Scanner da imagem frontend com muito mais debug
                             sh """
                                 export PATH="\$HOME/bin:\$PATH"
                                 mkdir -p ${TRIVY_CACHE_DIR}
                                 echo "========================================"
                                 echo "RELATÓRIO DE VULNERABILIDADES - FRONTEND"
                                 echo "========================================"
+                                echo "Versão do Trivy:"
+                                trivy --version
+                                echo ""
                                 echo "Executando: trivy image ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
+                                echo "Com cache em: ${TRIVY_CACHE_DIR}"
+                                echo ""
+                                
+                                # Primeiro scan com ALL severities para garantir que algo apareça
                                 trivy image --cache-dir ${TRIVY_CACHE_DIR} \
                                     --format table \
                                     --exit-code 0 \
-                                    --severity LOW,MEDIUM,HIGH,CRITICAL \
-                                    --output frontend-scan-output.txt \
+                                    --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output frontend-scan-all.txt \
                                     --debug \
                                     ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                
                                 echo ""
-                                echo "Exibindo resultado do scan:"
-                                cat frontend-scan-output.txt
+                                echo "=== SCAN COMPLETO (TODAS AS SEVERIDADES) ==="
+                                cat frontend-scan-all.txt
                                 echo ""
-                                echo "Tamanho do arquivo de saída: \$(wc -l < frontend-scan-output.txt) linhas"
+                                echo "Linhas no arquivo: \$(wc -l < frontend-scan-all.txt)"
+                                echo "Tamanho do arquivo: \$(ls -lh frontend-scan-all.txt)"
+                                
+                                # Segundo scan só com HIGH e CRITICAL
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format table \
+                                    --exit-code 0 \
+                                    --severity HIGH,CRITICAL \
+                                    --output frontend-scan-high.txt \
+                                    ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                
+                                echo ""
+                                echo "=== SCAN SÓ HIGH/CRITICAL ==="
+                                cat frontend-scan-high.txt
+                                
+                                # Terceiro scan no formato JSON para análise
+                                trivy image --cache-dir ${TRIVY_CACHE_DIR} \
+                                    --format json \
+                                    --exit-code 0 \
+                                    --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL \
+                                    --output frontend-scan-debug.json \
+                                    ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                                
+                                echo ""
+                                echo "=== ANÁLISE DO JSON ==="
+                                echo "Tamanho do JSON: \$(ls -lh frontend-scan-debug.json)"
+                                echo "Resultados encontrados:"
+                                cat frontend-scan-debug.json | grep -c '"VulnerabilityID"' || echo "0 vulnerabilidades encontradas"
                             """
                             
                             // Gera relatório JSON para análise posterior (opcional)
