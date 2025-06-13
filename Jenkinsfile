@@ -26,7 +26,7 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Push Images') {
             parallel {
                 stage('Push Frontend') {
@@ -51,98 +51,114 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Security Scan') {
             parallel {
                 stage('Scan Frontend') {
                     steps {
                         script {
-                            try {
-                                sh '''
-                                    if ! command -v trivy &> /dev/null; then
-                                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
-                                    fi
-                                '''
-                                def trivyCmd = sh(script: 'command -v trivy', returnStdout: true).trim()
-                                sh """
-                                    ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} || true
-                                    ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} > frontend-scan.json || true
-                                """
-                                sh """
-                                    python3 << 'EOF'
+                            // Instala o Trivy se não existir
+                            sh '''
+                                if ! command -v trivy &> /dev/null; then
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
+                                fi
+                            '''
+                            // Usa ./trivy caso trivy global não exista
+                            def trivyCmd = sh(script: 'command -v trivy', returnStatus: true) == 0 ? 'trivy' : './trivy'
+
+                            // Executa scan sem falhar o build mesmo com vulnerabilidades
+                            sh """
+                                ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}
+                            """
+
+                            // Gera relatório JSON para análise de severidades
+                            sh """
+                                ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG} > frontend-scan.json
+                                
+                                python3 << 'EOF'
 import json
 try:
     with open('frontend-scan.json', 'r') as f:
         data = json.load(f)
+    
     critical = high = medium = low = unknown = 0
     for result in data.get('Results', []):
         for vuln in result.get('Vulnerabilities', []):
             severity = vuln.get('Severity', 'UNKNOWN').upper()
-            if severity == 'CRITICAL': critical += 1
-            elif severity == 'HIGH': high += 1
-            elif severity == 'MEDIUM': medium += 1
-            elif severity == 'LOW': low += 1
-            else: unknown += 1
+            if severity == 'CRITICAL': 
+                critical += 1
+            elif severity == 'HIGH': 
+                high += 1
+            elif severity == 'MEDIUM': 
+                medium += 1
+            elif severity == 'LOW': 
+                low += 1
+            else: 
+                unknown += 1
+    
     total = critical + high + medium + low + unknown
     print(f"Frontend - Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})")
 except Exception as e:
-    print("Frontend - Scan error:", str(e))
+    print(f"Frontend - Scan error: {e}")
 EOF
-                                """                                
-                            } catch (err) {
-                                echo "Trivy scan (frontend) falhou, mas continuando: ${err}"
-                            }
+                            """
                         }
                     }
                 }
-
+                
                 stage('Scan Backend') {
                     steps {
                         script {
-                            try {
-                                sh '''
-                                    if ! command -v trivy &> /dev/null; then
-                                        curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
-                                    fi
-                                '''
-                                def trivyCmd = sh(script: 'command -v trivy', returnStdout: true).trim()
-                                sh """
-                                    ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} || true
-                                    ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} > backend-scan.json || true
-                                """
-                                sh """
-                                    python3 << 'EOF'
+                            sh '''
+                                if ! command -v trivy &> /dev/null; then
+                                    curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b .
+                                fi
+                            '''
+                            def trivyCmd = sh(script: 'command -v trivy', returnStatus: true) == 0 ? 'trivy' : './trivy'
+                            
+                            sh """
+                                ${trivyCmd} image --format table --exit-code 0 ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}
+                            """
+                            
+                            sh """
+                                ${trivyCmd} image --format json --quiet ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG} > backend-scan.json
+                                
+                                python3 << 'EOF'
 import json
 try:
     with open('backend-scan.json', 'r') as f:
         data = json.load(f)
+    
     critical = high = medium = low = unknown = 0
     for result in data.get('Results', []):
         for vuln in result.get('Vulnerabilities', []):
             severity = vuln.get('Severity', 'UNKNOWN').upper()
-            if severity == 'CRITICAL': critical += 1
-            elif severity == 'HIGH': high += 1
-            elif severity == 'MEDIUM': medium += 1
-            elif severity == 'LOW': low += 1
-            else: unknown += 1
+            if severity == 'CRITICAL': 
+                critical += 1
+            elif severity == 'HIGH': 
+                high += 1
+            elif severity == 'MEDIUM': 
+                medium += 1
+            elif severity == 'LOW': 
+                low += 1
+            else: 
+                unknown += 1
+    
     total = critical + high + medium + low + unknown
     print(f"Backend - Total: {total} (UNKNOWN: {unknown}, LOW: {low}, MEDIUM: {medium}, HIGH: {high}, CRITICAL: {critical})")
 except Exception as e:
-    print("Backend - Scan error:", str(e))
+    print(f"Backend - Scan error: {e}")
 EOF
-                                """                                
-                            } catch (err) {
-                                echo "Trivy scan (backend) falhou, mas continuando: ${err}"
-                            }
+                            """
                         }
                     }
                 }
             }
         }
-
+        
         stage('Deploy') {
             when {
-                not {
+                not { 
                     anyOf {
                         equals expected: 'FAILURE', actual: currentBuild.result
                         equals expected: 'ABORTED', actual: currentBuild.result
@@ -162,10 +178,10 @@ EOF
                 }
             }
         }
-
+        
         stage('Verify') {
             when {
-                not {
+                not { 
                     anyOf {
                         equals expected: 'FAILURE', actual: currentBuild.result
                         equals expected: 'ABORTED', actual: currentBuild.result
@@ -187,13 +203,13 @@ EOF
     post {
         always {
             chuckNorris()
-            sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml frontend-scan.json backend-scan.json || true'
+            sh 'rm -f ./trivy ./k8s/deployment.tmp.yaml frontend-scan.json backend-scan.json'
         }
         success {
             echo '🚀 Deploy realizado com sucesso!'
             echo "✅ Frontend: ${DOCKERHUB_REPO}/meu-frontend:${BUILD_TAG}"
             echo "✅ Backend: ${DOCKERHUB_REPO}/meu-backend:${BUILD_TAG}"
-
+            
             discordSend(
                 description: """
 **✅ Deploy Realizado com Sucesso!**
@@ -221,6 +237,7 @@ EOF
         }
         failure {
             echo '❌ Build falhou!'
+            
             discordSend(
                 description: """
 **❌ Build Falhou!**
@@ -238,6 +255,7 @@ EOF
         }
         unstable {
             echo '⚠️ Build instável!'
+            
             discordSend(
                 description: """
 **⚠️ Build Instável!**
@@ -255,6 +273,7 @@ EOF
         }
         aborted {
             echo '🛑 Build cancelado!'
+            
             discordSend(
                 description: """
 **🛑 Build Cancelado!**
