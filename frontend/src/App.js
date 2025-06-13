@@ -86,7 +86,7 @@ export default function App() {
       <div className="container">
         <header className="header">
           <h1>Projeto Frontend</h1>
-          <p className="subtitle">Teste v1.5</p>
+          <p className="subtitle">Teste v1.6</p>
         </header>
 
         <div className="grid">
