@@ -5,6 +5,27 @@ Ele contém os arquivos e estruturas necessários para a implementação complet
 
 ---
 
+<h3>🚀 Backend - FastAPI</h3>
+<ul>
+  <li>Crie 7 endpoints no backend:
+    <ul>
+      <li><code>/color</code> — Retorna uma cor aleatória para o fundo da página.</li>
+      <li><code>/cat</code> — Retorna uma imagem aleatória de gato.</li>
+      <li><code>/random-photo</code> — Retorna uma foto aleatória (ex.: via Picsum).</li>
+      <li><code>/time</code> — Retorna o horário atual do servidor.</li>
+      <li><code>/joke</code> — Redireciona para uma piada (use uma API pública).</li>
+      <li><code>/scare</code> — Retorna uma imagem de susto (ex.: GIF).  
+        <br><em>(Na verdade, não é um GIF assustador — o susto vem por clicar e aparecer um gif do nada.)</em>
+      </li>
+      <li><code>/lookalike</code> — Retorna uma imagem aleatória de “sósia”.  
+        <br><em>(Na verdade, são apenas fotos de pessoas aleatórias, o termo “sósia” é só para dar graça.)</em>
+      </li>
+    </ul>
+  </li>
+</ul>
+
+---
+
 ## 📑 Sumário
 
 - [🖥️ Backend](https://github.com/andrrade/Aplicacao-Exemplo-Project3/tree/main/backend)
